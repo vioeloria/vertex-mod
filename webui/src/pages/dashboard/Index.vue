@@ -72,6 +72,13 @@
           style="margin: 24px auto; text-align: center; max-width: 1440px;"
           v-if="runInfo.dashboardContent.filter(item => item === 'downloader')[0]"
           >
+          <div class="data-rect-2 highlight-1" style="color: #fff;">
+            <div style="font-size: 14px; font-weight: bold; padding: 16px 16px;">
+              <div>全部下载器</div>
+              <div style="margin: initial; font-size: 12px;">实时总速度 ({{ downloaders.length }} 个)</div>
+              <div style="margin: initial; font-size: 16px;">{{ $formatSize(totalSpeed.upload) }}/s ↑ / {{ $formatSize(totalSpeed.download) }}/s ↓</div>
+            </div>
+          </div>
           <template v-for="(downloader, index ) in downloaders" :key="downloader.id">
             <div
               @click="gotoClient(`/proxy/client/${downloader.id}/`)"
@@ -313,6 +320,15 @@ export default {
       downloaders: [],
       loading: true
     };
+  },
+  computed: {
+    totalSpeed () {
+      return this.downloaders.reduce((acc, item) => {
+        acc.upload += item.uploadSpeed || 0;
+        acc.download += item.downloadSpeed || 0;
+        return acc;
+      }, { upload: 0, download: 0 });
+    }
   },
   methods: {
     isMobile () {

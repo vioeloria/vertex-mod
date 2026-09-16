@@ -18,7 +18,80 @@ const redlock = require('./redlock');
 const logger = require('./logger');
 const scrape = require('./scrape');
 
-const db = new Database(path.join(__dirname, '../db/sql.db'));
+const dbDir = path.join(__dirname, '../db');
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+const db = new Database(path.join(dbDir, 'sql.db'));
+db.exec(`
+CREATE TABLE IF NOT EXISTS sites (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  site TEXT NOT NULL,
+  uid INTEGER NOT NULL,
+  username TEXT NOT NULL,
+  upload INTEGER NOT NULL,
+  download INTEGER NOT NULL,
+  bonus INTEGER NOT NULL,
+  seeding_size INTEGER NOT NULL,
+  seeding_num INTEGER NOT NULL,
+  "level" TEXT NOT NULL,
+  update_time INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS torrents (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  "size" INTEGER NOT NULL,
+  upload INTEGER,
+  download INTEGER,
+  record_time INTEGER NOT NULL,
+  add_time INTEGER,
+  delete_time INTEGER,
+  rss_id TEXT NOT NULL,
+  tracker TEXT,
+  link TEXT NOT NULL,
+  category TEXT,
+  record_type INTEGER NOT NULL,
+  record_note TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS vnstat (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  unique_id INTEGER NOT NULL,
+  "type" INTEGER NOT NULL,
+  interface TEXT NOT NULL,
+  "year" INTEGER NOT NULL,
+  "month" INTEGER,
+  "day" INTEGER,
+  "hour" INTEGER,
+  "minute" INTEGER,
+  tx INTEGER NOT NULL,
+  rx INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS torrent_flow (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  hash TEXT NOT NULL,
+  time INTEGER NOT NULL,
+  upload INTEGER NOT NULL,
+  download INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tracker_flow (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  tracker TEXT NOT NULL,
+  time INTEGER NOT NULL,
+  upload INTEGER NOT NULL,
+  download INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS index_sites_site on sites (site);
+CREATE INDEX IF NOT EXISTS index_sites_time on sites (update_time);
+CREATE INDEX IF NOT EXISTS index_t_hash on torrents (hash);
+CREATE INDEX IF NOT EXISTS index_t_link on torrents (link);
+CREATE INDEX IF NOT EXISTS index_t_tracker on torrents (tracker);
+CREATE INDEX IF NOT EXISTS index_t_upload on torrents (upload);
+CREATE INDEX IF NOT EXISTS index_tf_hash on torrent_flow (hash);
+CREATE INDEX IF NOT EXISTS index_tf_time on torrent_flow ("time");
+CREATE INDEX IF NOT EXISTS index_tkf_time on tracker_flow (time);
+CREATE INDEX IF NOT EXISTS index_tkf_tracker on tracker_flow (tracker);
+`);
 puppeteer.use(StealthPlugin());
 
 let browser;

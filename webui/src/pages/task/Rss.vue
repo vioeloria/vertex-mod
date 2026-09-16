@@ -571,11 +571,18 @@ export default {
     },
     modifyClick (row) {
       this.rss = { ...row };
+      this.fillReseedClients();
     },
     cloneClick (row) {
       this.rss = JSON.parse(JSON.stringify(row));
       this.rss.id = null;
       this.rss.alias = this.rss.alias + '-克隆';
+      this.fillReseedClients();
+    },
+    fillReseedClients () {
+      if (this.rss.rssReseed && this.downloaders.length > 0 && (!this.rss.reseedClients || this.rss.reseedClients.length === 0)) {
+        this.rss.reseedClients = this.downloaders.filter(item => item.enable).map(item => item.id);
+      }
     },
     async deleteRss (row) {
       try {
@@ -595,6 +602,11 @@ export default {
         reseedClients: [],
         rssUrls: ['']
       };
+    }
+  },
+  watch: {
+    'rss.rssReseed' () {
+      this.fillReseedClients();
     }
   },
   async mounted () {
