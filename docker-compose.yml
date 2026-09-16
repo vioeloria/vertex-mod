@@ -1,0 +1,19 @@
+services:
+  vertex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vioeloria/vertex:latest
+    container_name: vertex
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      PUID: 0
+      PGID: 0
+      PORT: 3000
+      REDISPORT: 6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./vertex:/vertex
+    stop_grace_period: 30s
