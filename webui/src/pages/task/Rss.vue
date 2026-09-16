@@ -235,7 +235,7 @@
         <a-form-item
           label="每小时上限"
           name="addCountPerHour"
-          extra="每小时向客户端推送种子数量上限, 留空为 20, 编辑 Rss 或重启后重置计数">
+          extra="每小时向客户端推送种子数量上限, 留空为 999, 编辑 Rss 或重启后重置计数">
           <a-input size="small" v-model:value="rss.addCountPerHour"/>
         </a-form-item>
         <a-form-item

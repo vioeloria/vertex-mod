@@ -38,7 +38,7 @@ class Rss {
     this.useCustomRegex = rss.useCustomRegex;
     this.regexStr = rss.regexStr;
     this.replaceStr = rss.replaceStr;
-    this.addCountPerHour = +rss.addCountPerHour || 20;
+    this.addCountPerHour = +rss.addCountPerHour || 999;
     this.addCount = 0;
     this.pushTorrentFile = rss.pushTorrentFile;
     this.notify = util.listPush().filter(item => item.id === rss.notify)[0] || {};
@@ -260,6 +260,11 @@ class Rss {
       await targetClient.addTorrentByTorrentFile(filepath, hash, this.reseedSkipChecking, this.uploadLimit, this.downloadLimit, targetTorrent.savePath, this.category, false, false);
       if (hash) {
         await util.sleep(1000);
+        try {
+          await targetClient.addTorrentTag(hash, `${this.alias}_辅种`);
+        } catch (e) {
+          logger.error(this.alias, '辅种打标签失败:', torrent.name, '\n', e);
+        }
         await targetClient.resumeTorrent(hash);
       }
       await util.runRecord('INSERT INTO torrents (hash, name, size, rss_id, category, link, record_time, add_time, record_type, record_note) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
