@@ -280,7 +280,7 @@
           v-if="rss.rssReseed"
           label="辅种进度阈值"
           name="reseedProgress"
-          extra="下载器中同名种子达到该进度(%)后才会触发辅种, 默认 80">
+          extra="下载器中同名种子达到该进度(%)后才会触发辅种, 默认 50">
           <a-input size="small" v-model:value="rss.reseedProgress"/>
         </a-form-item>
         <a-form-item
@@ -483,7 +483,7 @@ export default {
         rssReseed: false,
         autoReseed: false,
         onlyReseed: false,
-        reseedProgress: 80,
+        reseedProgress: 50,
         reseedSkipChecking: true,
         maxSleepTime: 600,
         skipSameTorrent: true,

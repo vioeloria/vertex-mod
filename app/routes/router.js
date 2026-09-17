@@ -162,6 +162,11 @@ module.exports = function (app, express, router) {
   router.post('/notification/modify', ctrl.Push.modify);
   router.post('/notification/delete', ctrl.Push.delete);
 
+  router.post('/irc/add', ctrl.IRC.add);
+  router.get('/irc/list', ctrl.IRC.list);
+  router.post('/irc/modify', ctrl.IRC.modify);
+  router.post('/irc/delete', ctrl.IRC.delete);
+
   router.post('/site/add', ctrl.Site.add);
   router.get('/site/list', ctrl.Site.list);
   router.get('/site/listRecord', ctrl.Site.listRecord);

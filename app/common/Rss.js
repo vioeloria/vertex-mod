@@ -23,7 +23,7 @@ class Rss {
     this.autoReseed = rss.rssReseed !== undefined ? !!rss.rssReseed : !!rss.autoReseed;
     this.onlyReseed = rss.onlyReseed;
     this.reseedClients = rss.reseedClients || [];
-    this.reseedProgress = (rss.reseedProgress === undefined || rss.reseedProgress === null || rss.reseedProgress === '') ? 80 : Math.min(100, Math.max(0, +rss.reseedProgress));
+    this.reseedProgress = (rss.reseedProgress === undefined || rss.reseedProgress === null || rss.reseedProgress === '') ? 50 : Math.min(100, Math.max(0, +rss.reseedProgress));
     this.reseedSkipChecking = rss.reseedSkipChecking === undefined ? true : !!rss.reseedSkipChecking;
     this.pushMessage = rss.pushMessage;
     this.skipSameTorrent = rss.skipSameTorrent;
@@ -203,7 +203,7 @@ class Rss {
     this.ntf = new Push(this.notify);
   }
 
-  async _reseedTargets () {
+  _reseedTargets () {
     const keys = (this.reseedClients && this.reseedClients.length > 0) ? this.reseedClients : Object.keys(global.runningClient);
     const clients = [];
     for (const key of keys) {
@@ -215,6 +215,19 @@ class Rss {
       clients.push(client);
     }
     return clients;
+  }
+
+  _reseedIndex () {
+    if (this._reseedIndexCache) return this._reseedIndexCache;
+    const index = {};
+    for (const client of this._reseedTargets()) {
+      for (const _torrent of client.maindata.torrents) {
+        if (!index[_torrent.name]) index[_torrent.name] = [];
+        index[_torrent.name].push({ client, torrent: _torrent });
+      }
+    }
+    this._reseedIndexCache = index;
+    return index;
   }
 
   _reseedSkipSameSize (torrent, targetTorrent) {
@@ -232,20 +245,19 @@ class Rss {
   async _rssReseed (torrent) {
     if (!this.autoReseed || !torrent.url) return false;
     if (torrent.hash && torrent.hash.indexOf('fakehash') !== -1) return false;
-    const clients = await this._reseedTargets();
+    const candidates = this._reseedIndex()[torrent.name] || [];
     let targetClient = null;
     let targetTorrent = null;
-    for (const client of clients) {
-      for (const _torrent of client.maindata.torrents) {
-        if (_torrent.name !== torrent.name) continue;
-        const progress = +_torrent.size > 0 ? (+_torrent.completed / +_torrent.size) * 100 : 0;
-        if (progress < this.reseedProgress) continue;
-        if (_torrent.hash === torrent.hash) return false;
-        targetClient = client;
-        targetTorrent = _torrent;
-        break;
-      }
-      if (targetClient) break;
+    for (const candidate of candidates) {
+      const _torrent = candidate.torrent;
+      const progress = +_torrent.size > 0 ? (+_torrent.completed / +_torrent.size) * 100 : 0;
+      if (progress < this.reseedProgress) continue;
+      if (_torrent.hash === torrent.hash) continue;
+      const ownRecord = await util.getRecord('SELECT * FROM torrents WHERE hash = ? AND rss_id = ?', [_torrent.hash, this.id]);
+      if (ownRecord && ownRecord.id) continue;
+      targetClient = candidate.client;
+      targetTorrent = _torrent;
+      break;
     }
     if (!targetClient || !targetTorrent) return false;
     if (this.skipSameTorrent && this._reseedSkipSameSize(torrent, targetTorrent)) {
@@ -453,6 +465,7 @@ class Rss {
     } else {
       torrents = (await Promise.all(this.urls.map(url => rss.getTorrents(url)))).flat();
     }
+    this._reseedIndexCache = null;
     for (const torrent of torrents) {
       const availableClients = this.clientArr
         .map(item => global.runningClient[item])
@@ -473,7 +486,12 @@ class Rss {
           (a.maindata[this.clientSortBy] - b.maindata[this.clientSortBy])
         )[0] || availableClients[0];
       const sqlRes = await util.getRecord('SELECT * FROM torrents WHERE hash = ? AND rss_id = ?', [torrent.hash, this.id]);
-      if (sqlRes && sqlRes.id) continue;
+      if (sqlRes && sqlRes.id) {
+        if (this.autoReseed && this.addCount < this.addCountPerHour) {
+          await this._rssReseed(torrent);
+        }
+        continue;
+      }
       if (torrent.name.indexOf('[FROZEN]') !== -1) continue;
       if (this.addCount >= this.addCountPerHour) {
         await util.runRecord('INSERT INTO torrents (hash, name, size, rss_id, link, record_time, record_type, record_note) values (?, ?, ?, ?, ?, ?, ?, ?)',

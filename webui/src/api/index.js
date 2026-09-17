@@ -14,6 +14,7 @@ import watch from './watch';
 import subscribe from './subscribe';
 import torrent from './torrent';
 import log from './log';
+import irc from './irc';
 
 const api = {
   user,
@@ -22,6 +23,7 @@ const api = {
   server,
   site,
   notification,
+  irc,
   deleteRule,
   linkRule,
   rssRule,

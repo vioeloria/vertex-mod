@@ -57,6 +57,10 @@ class UserMod {
           title: '通知工具',
           path: '/base/notification',
           icon: ['fas', 'bell']
+        }, {
+          title: 'IRC 自动下载',
+          path: '/base/irc',
+          icon: ['fas', 'tower-broadcast']
         }]
       }, {
         title: '规则组件',

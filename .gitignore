@@ -2,6 +2,7 @@ node_modules
 app/static
 webui/public/assets/styles
 logs
+data
 app/data
 app/db/sql.db
 app/config/sql.db
