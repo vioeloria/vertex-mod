@@ -14,7 +14,7 @@ class RssProxyMod {
     set.id = id;
     if (set.secret) set.token = this._genToken(id, set.secret);
     fs.writeFileSync(path.join(__dirname, '../data/rssproxy', id + '.json'), JSON.stringify(set, null, 2));
-    return '添加 RSS 代理成功';
+    return set;
   };
 
   delete (options) {
@@ -26,7 +26,7 @@ class RssProxyMod {
     const set = { ...options };
     if (set.secret) set.token = this._genToken(set.id, set.secret);
     fs.writeFileSync(path.join(__dirname, '../data/rssproxy', options.id + '.json'), JSON.stringify(set, null, 2));
-    return '修改 RSS 代理成功';
+    return set;
   };
 
   list () {

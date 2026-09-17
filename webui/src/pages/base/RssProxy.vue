@@ -129,7 +129,10 @@
           v-if="proxy.token"
           label="代理地址"
           name="proxyUrl">
-          <a-input size="small" readonly :value="getProxyUrl(proxy)"/>
+          <a-input-group compact>
+            <a-input size="small" readonly :value="getProxyUrl(proxy)" style="width: calc(100% - 72px);"/>
+            <a-button size="small" type="primary" style="width: 72px;" @click="copyUrl(proxy)">复制</a-button>
+          </a-input-group>
         </a-form-item>
         <a-form-item
           :wrapperCol="isMobile() ? { span:24 } : { span: 21, offset: 3 }">
@@ -203,12 +206,41 @@ export default {
     getProxyUrl (record) {
       return window.location.origin + '/rss/' + record.token + '.xml';
     },
-    async copyUrl (record) {
+    copyText (text) {
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      input.style.top = '-1000px';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.focus();
+      input.select();
+      let ok = false;
       try {
-        await navigator.clipboard.writeText(this.getProxyUrl(record));
-        this.$message().success('已复制代理地址');
+        ok = document.execCommand('copy');
       } catch (e) {
-        this.$message().error('复制失败, 请手动复制');
+        ok = false;
+      }
+      document.body.removeChild(input);
+      return ok;
+    },
+    async copyUrl (record) {
+      const url = this.getProxyUrl(record);
+      let ok = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(url);
+          ok = true;
+        } catch (e) {
+          ok = this.copyText(url);
+        }
+      } else {
+        ok = this.copyText(url);
+      }
+      if (ok) {
+        this.$message().success('已复制代理地址');
+      } else {
+        this.$message().warning('复制失败, 请手动复制: ' + url);
       }
     },
     async listProxy () {
@@ -221,10 +253,12 @@ export default {
     },
     async modifyProxy () {
       try {
-        await this.$api().rssProxy.modify({ ...this.proxy });
-        this.$message().success((this.proxy.id ? '编辑' : '新增') + '成功, 列表正在刷新...');
+        const res = await this.$api().rssProxy.modify({ ...this.proxy });
+        this.$message().success((this.proxy.id ? '编辑' : '新增') + '成功, 代理地址已生成');
+        if (res.data && res.data.token) {
+          this.proxy = { ...res.data };
+        }
         setTimeout(() => this.listProxy(), 1000);
-        this.clearProxy();
       } catch (e) {
         this.$message().error(e.message);
       }

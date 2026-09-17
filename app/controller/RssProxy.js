@@ -12,7 +12,8 @@ class RssProxy {
       const r = rssProxyMod.add(options);
       res.send({
         success: true,
-        message: r
+        message: '添加 RSS 代理成功',
+        data: r
       });
     } catch (e) {
       logger.error(e);
@@ -46,7 +47,8 @@ class RssProxy {
       const r = rssProxyMod.modify(options);
       res.send({
         success: true,
-        message: r
+        message: '修改 RSS 代理成功',
+        data: r
       });
     } catch (e) {
       logger.error(e);

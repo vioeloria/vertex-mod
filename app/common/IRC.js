@@ -161,6 +161,28 @@ class IRC {
       .replace(/\{title\}/g, torrent.title || '');
   }
 
+  _genericParse (channel, formatMessage) {
+    const titleMatch = formatMessage.match(/Name:\s*'([^']+)'/) || formatMessage.match(/Name:\s*"([^"]+)"/);
+    const urls = formatMessage.match(/https?:\/\/\S+/g);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+    const link = urls && urls.length ? urls[urls.length - 1].replace(/[>\]]+$/, '') : '';
+    if (!title || !link) return null;
+    const id = this._extractId(channel, link, {});
+    let url = link;
+    if (channel.downloadTemplate) {
+      url = this._buildUrl(channel, { id, link, title });
+    }
+    return {
+      title,
+      name: title,
+      link,
+      url,
+      id,
+      size: 0,
+      hash: ''
+    };
+  }
+
   _parseAnnounce (channel, message) {
     const formatMessage = message
       .replace(/\x02\d{2}([^\d])/g, '$1')
@@ -168,13 +190,20 @@ class IRC {
       .replace(/\x02/g, '')
       .replace(/\x03/g, '');
     let regRes;
-    try {
-      regRes = formatMessage.match(new RegExp(channel.regexp || DEFAULT_REGEXP));
-    } catch (e) {
-      logger.error('IRC', this.alias, '播报正则错误\n', e);
-      return null;
+    if (channel.regexp) {
+      try {
+        regRes = formatMessage.match(new RegExp(channel.regexp));
+      } catch (e) {
+        logger.error('IRC', this.alias, '播报正则错误\n', e);
+        return null;
+      }
+      if (!regRes) return null;
+    } else {
+      regRes = formatMessage.match(new RegExp(DEFAULT_REGEXP));
+      if (!regRes) {
+        return this._genericParse(channel, formatMessage);
+      }
     }
-    if (!regRes) return null;
     const groups = regRes.groups || {};
     const title = groups.title || regRes[1];
     const link = groups.link || groups.url || regRes[2] || regRes[3];
