@@ -24,6 +24,10 @@ class IRC {
     this.secure = irc.secure === undefined ? true : !!irc.secure;
     this.channels = irc.channels || [];
     this.filters = irc.filters || [];
+    this._acceptRules = irc.acceptRules || [];
+    this._rejectRules = irc.rejectRules || [];
+    this.acceptRules = util.listRssRule().filter(item => this._acceptRules.indexOf(item.id) !== -1).sort((a, b) => +b.priority - +a.priority);
+    this.rejectRules = util.listRssRule().filter(item => this._rejectRules.indexOf(item.id) !== -1).sort((a, b) => +b.priority - +a.priority);
     this.clientArr = irc.clientArr || (irc.client ? [irc.client] : []);
     this.clientSortBy = irc.clientSortBy || 'leechingCount';
     this.maxClientUploadSpeed = util.calSize(irc.maxClientUploadSpeed, irc.maxClientUploadSpeedUnit);
@@ -125,6 +129,39 @@ class IRC {
       logger.error('IRC', this.alias, '过滤器错误\n', e);
       return false;
     }
+  }
+
+  _fitRule (rule, torrent) {
+    if (rule.type === 'javascript') {
+      try {
+        // eslint-disable-next-line no-eval
+        return (eval(rule.code))(torrent);
+      } catch (e) {
+        logger.error('IRC', this.alias, '规则', rule.alias, '存在语法错误\n', e);
+        return false;
+      }
+    }
+    try {
+      return rule.conditions.length !== 0 && this._fitConditions(torrent, rule.conditions);
+    } catch (e) {
+      logger.error('IRC', this.alias, '规则', rule.alias, '遇到错误\n', e);
+      return false;
+    }
+  }
+
+  _matchRules (torrent) {
+    for (const rejectRule of this.rejectRules) {
+      if (this._fitRule(rejectRule, torrent)) {
+        return { matched: false, note: '拒绝规则: ' + rejectRule.alias };
+      }
+    }
+    if (this.acceptRules.length > 0 && this.acceptRules.filter(item => this._fitRule(item, torrent)).length === 0) {
+      return { matched: false, note: '不符合所有选择规则' };
+    }
+    if (!this._fitFilters(torrent)) {
+      return { matched: false, note: '不符合过滤器' };
+    }
+    return { matched: true, note: '' };
   }
 
   _record (record) {
@@ -321,7 +358,7 @@ class IRC {
         logger.error('IRC', this.alias, '获取种子实际大小失败:', torrent.title, '\n', e);
       }
     }
-    const matched = this._fitFilters(torrent);
+    const { matched, note } = this._matchRules(torrent);
     const record = {
       time: moment().format('MM-DD HH:mm:ss'),
       channel: channel.channel || '',
@@ -331,6 +368,7 @@ class IRC {
       link: torrent.link,
       url: torrent.url,
       matched,
+      note,
       pushed: false
     };
     this._record(record);

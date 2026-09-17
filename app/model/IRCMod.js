@@ -11,6 +11,8 @@ class IRCMod {
     set.id = id;
     set.channels = set.channels || [];
     set.filters = set.filters || [];
+    set.acceptRules = set.acceptRules || [];
+    set.rejectRules = set.rejectRules || [];
     set.clientArr = set.clientArr || (set.client ? [set.client] : []);
     fs.writeFileSync(path.join(__dirname, '../data/irc', id + '.json'), JSON.stringify(set, null, 2));
     if (global.runningIRC[id]) global.runningIRC[id].destroy();
@@ -28,6 +30,8 @@ class IRCMod {
     const set = { ...options };
     set.channels = set.channels || [];
     set.filters = set.filters || [];
+    set.acceptRules = set.acceptRules || [];
+    set.rejectRules = set.rejectRules || [];
     set.clientArr = set.clientArr || (set.client ? [set.client] : []);
     fs.writeFileSync(path.join(__dirname, '../data/irc', options.id + '.json'), JSON.stringify(set, null, 2));
     if (global.runningIRC[options.id]) global.runningIRC[options.id].destroy();
@@ -40,6 +44,8 @@ class IRCMod {
     for (const irc of ircList) {
       irc.channels = irc.channels || [];
       irc.filters = irc.filters || [];
+      irc.acceptRules = irc.acceptRules || [];
+      irc.rejectRules = irc.rejectRules || [];
       irc.clientArr = irc.clientArr || (irc.client ? [irc.client] : []);
       irc.status = !!(global.runningIRC[irc.id] && global.runningIRC[irc.id].status);
     }

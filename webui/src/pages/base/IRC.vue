@@ -142,9 +142,33 @@
           <a-button size="small" type="primary" @click="irc.channels.push({ channel: '', announcer: '', key: '', welcomeText: '', enterCommand: '', regexp: '', idRegexp: '', downloadTemplate: '', rsskey: '', passkey: '' })">添加频道</a-button>
         </a-form-item>
         <a-form-item
+          label="拒绝规则"
+          name="rejectRules"
+          extra="命中任一拒绝规则则不推送 (来自「规则组件 - RSS 规则」)">
+          <a-checkbox-group style="width: 100%;" v-model:value="irc.rejectRules">
+            <a-row>
+              <a-col v-for="rule of rssRules" :span="8" :key="rule.id">
+                <a-checkbox v-model:value="rule.id">{{ rule.alias }}</a-checkbox>
+              </a-col>
+            </a-row>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-form-item
+          label="选择规则"
+          name="acceptRules"
+          extra="需命中任一选择规则才推送, 不选则不限制 (来自「规则组件 - RSS 规则」)">
+          <a-checkbox-group style="width: 100%;" v-model:value="irc.acceptRules">
+            <a-row>
+              <a-col v-for="rule of rssRules" :span="8" :key="rule.id">
+                <a-checkbox v-model:value="rule.id">{{ rule.alias }}</a-checkbox>
+              </a-col>
+            </a-row>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-form-item
           label="过滤器"
           name="filters"
-          extra="全部条件均满足时才会自动下载; 不添加则下载所有播报">
+          extra="IRC 内联过滤器, 全部条件均满足时才会自动下载; 不添加则下载所有播报">
           <a-form-item-rest v-for="(filter, index) in irc.filters" :key="index">
             <a-input-group compact style="margin-bottom: 6px;">
               <a-input size="small" v-model:value="filter.key" placeholder="字段, 如 title/size/link/url" style="width: 28%;"/>
@@ -382,6 +406,10 @@ export default {
         dataIndex: 'matched',
         width: 70
       }, {
+        title: '备注',
+        dataIndex: 'note',
+        width: 150
+      }, {
         title: '状态',
         dataIndex: 'pushed',
         width: 80
@@ -392,6 +420,7 @@ export default {
       messageColumns,
       ircList: [],
       downloaders: [],
+      rssRules: [],
       irc: {},
       previewVisible: false,
       previewId: null,
@@ -413,6 +442,8 @@ export default {
         secure: true,
         channels: [],
         filters: [],
+        acceptRules: [],
+        rejectRules: [],
         clientArr: [],
         clientSortBy: 'leechingCount',
         maxClientUploadSpeed: '',
@@ -457,6 +488,14 @@ export default {
         this.$message().error(e.message);
       }
     },
+    async listRssRule () {
+      try {
+        const res = await this.$api().rssRule.list();
+        this.rssRules = res.data.sort((a, b) => a.alias.localeCompare(b.alias));
+      } catch (e) {
+        this.$message().error(e.message);
+      }
+    },
     async modifyIrc () {
       try {
         await this.$api().irc.modify({ ...this.irc });
@@ -481,6 +520,8 @@ export default {
       this.irc = JSON.parse(JSON.stringify(row));
       this.irc.channels = this.irc.channels || [];
       this.irc.filters = this.irc.filters || [];
+      this.irc.acceptRules = this.irc.acceptRules || [];
+      this.irc.rejectRules = this.irc.rejectRules || [];
       this.irc.clientArr = this.irc.clientArr || (this.irc.client ? [this.irc.client] : []);
     },
     cloneClick (row) {
@@ -542,6 +583,7 @@ export default {
   async mounted () {
     this.clearIrc();
     this.listDownloader();
+    this.listRssRule();
     this.listIrc();
   },
   beforeUnmount () {
