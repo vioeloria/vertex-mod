@@ -137,6 +137,30 @@ class IRC {
     }
   }
 
+  _extractId (channel, link, groups) {
+    if (groups.id) return groups.id;
+    if (channel.idRegexp) {
+      try {
+        const match = (link || '').match(new RegExp(channel.idRegexp));
+        if (match) return match[1] || match[0];
+      } catch (e) {
+        logger.error('IRC', this.alias, 'ID 正则错误\n', e);
+      }
+    }
+    const nums = (link || '').match(/\d+/g);
+    return nums && nums.length ? nums[nums.length - 1] : '';
+  }
+
+  _buildUrl (channel, torrent) {
+    if (!channel.downloadTemplate) return torrent.url;
+    return channel.downloadTemplate
+      .replace(/\{id\}/g, torrent.id || '')
+      .replace(/\{rsskey\}/g, channel.rsskey || '')
+      .replace(/\{passkey\}/g, channel.passkey || '')
+      .replace(/\{link\}/g, torrent.link || '')
+      .replace(/\{title\}/g, torrent.title || '');
+  }
+
   _parseAnnounce (channel, message) {
     const formatMessage = message
       .replace(/\x02\d{2}([^\d])/g, '$1')
@@ -153,14 +177,19 @@ class IRC {
     if (!regRes) return null;
     const groups = regRes.groups || {};
     const title = groups.title || regRes[1];
-    const link = groups.link || regRes[2];
-    const url = groups.url || regRes[3];
+    const link = groups.link || groups.url || regRes[2] || regRes[3];
+    const id = this._extractId(channel, link, groups);
+    let url = groups.url || regRes[3];
+    if (channel.downloadTemplate) {
+      url = this._buildUrl(channel, { id, link, title });
+    }
     if (!title || !url) return null;
     return {
       title,
       name: title,
       link: link || url,
       url,
+      id,
       size: this._parseSize(groups.size),
       hash: groups.hash || ''
     };

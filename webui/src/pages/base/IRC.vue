@@ -9,7 +9,10 @@
       <template #description>
         连接 PT 站 IRC 播报频道, 匹配到符合过滤器的种子后自动推送到下载器 (类似 autobrr)。
         <br>
-        频道正则需包含标题与下载链接, 推荐使用命名分组: <code>(?&lt;title&gt;.*?)</code> / <code>(?&lt;link&gt;https://.*?)</code> / <code>(?&lt;url&gt;https://.*)</code> / <code>(?&lt;size&gt;.*?)</code> / <code>(?&lt;hash&gt;[0-9a-f]{40})</code>。
+        频道正则需包含标题与链接, 推荐使用命名分组: <code>(?&lt;title&gt;.*?)</code> / <code>(?&lt;link&gt;https://\S+)</code> / <code>(?&lt;url&gt;https://\S+)</code> / <code>(?&lt;size&gt;.*?)</code> / <code>(?&lt;id&gt;\d+)</code> / <code>(?&lt;hash&gt;[0-9a-f]{40})</code>。
+        <br>
+        多数站点播报只给详情页链接, 用「下载地址模板」拼出真实下载地址, 占位符: <code>{id}</code> <code>{rsskey}</code> <code>{passkey}</code> <code>{link}</code> <code>{title}</code>。
+        例如 <code>https://www.torrentleech.org/rss/download/{id}/{rsskey}/test.torrent</code> 或 <code>https://pt.keepfrds.com/download.php?id={id}&amp;passkey={passkey}</code>。
       </template>
     </a-alert>
     <a-table
@@ -128,11 +131,15 @@
               <a-input size="small" v-model:value="channel.key" placeholder="频道密码(可选)" style="margin-bottom: 6px;"/>
               <a-input size="small" v-model:value="channel.welcomeText" placeholder="欢迎语(可选, 用于确认已进入频道)" style="margin-bottom: 6px;"/>
               <a-input size="small" v-model:value="channel.enterCommand" placeholder="进入指令(可选, 如 ENTER #channel user key)" style="margin-bottom: 6px;"/>
-              <a-input size="small" v-model:value="channel.regexp" placeholder="播报正则, 如 TORRENT: (.*?) - (https://.*?) / (https://.*)"/>
+              <a-input size="small" v-model:value="channel.regexp" placeholder="播报正则, 如 Name:'(?<title>.*?)'.*?(?<link>https://\S+)" style="margin-bottom: 6px;"/>
+              <a-input size="small" v-model:value="channel.idRegexp" placeholder="从链接提取ID的正则(可选, 如 /torrent/(\d+))" style="margin-bottom: 6px;"/>
+              <a-input size="small" v-model:value="channel.downloadTemplate" placeholder="下载地址模板, 如 https://www.torrentleech.org/rss/download/{id}/{rsskey}/test.torrent" style="margin-bottom: 6px;"/>
+              <a-input size="small" v-model:value="channel.rsskey" placeholder="rsskey (可选)" style="margin-bottom: 6px;"/>
+              <a-input size="small" v-model:value="channel.passkey" placeholder="passkey (可选)" style="margin-bottom: 6px;"/>
               <a-button type="danger" size="small" style="margin-top: 6px;" @click="() => irc.channels = irc.channels.filter((i, idx) => idx !== index)">删除频道</a-button>
             </div>
           </a-form-item-rest>
-          <a-button size="small" type="primary" @click="irc.channels.push({ channel: '', announcer: '', key: '', welcomeText: '', enterCommand: '', regexp: '' })">添加频道</a-button>
+          <a-button size="small" type="primary" @click="irc.channels.push({ channel: '', announcer: '', key: '', welcomeText: '', enterCommand: '', regexp: '', idRegexp: '', downloadTemplate: '', rsskey: '', passkey: '' })">添加频道</a-button>
         </a-form-item>
         <a-form-item
           label="过滤器"

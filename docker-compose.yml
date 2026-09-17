@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: vioeloria/vertex:latest
-    container_name: vertex
+    container_name: vertex-mod
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -13,7 +13,7 @@ services:
       PORT: 3000
       REDISPORT: 6379
     ports:
-      - "3000:3000"
+      - "3077:3000"
     volumes:
       - ./vertex:/vertex
     stop_grace_period: 30s
