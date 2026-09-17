@@ -41,6 +41,7 @@ const checkAuth = async function (req, res, next) {
     pathname.startsWith('/assets') ||
     pathname.startsWith('/workbox') ||
     pathname.startsWith('/api/openapi') ||
+    pathname.startsWith('/rss/') ||
     pathname === '/favicon.ico') {
     return next();
   }
@@ -168,6 +169,11 @@ module.exports = function (app, express, router) {
   router.post('/irc/delete', ctrl.IRC.delete);
   router.post('/irc/test', ctrl.IRC.test);
   router.get('/irc/messages', ctrl.IRC.messages);
+
+  router.post('/rssProxy/add', ctrl.RssProxy.add);
+  router.get('/rssProxy/list', ctrl.RssProxy.list);
+  router.post('/rssProxy/modify', ctrl.RssProxy.modify);
+  router.post('/rssProxy/delete', ctrl.RssProxy.delete);
 
   router.post('/site/add', ctrl.Site.add);
   router.get('/site/list', ctrl.Site.list);
@@ -297,6 +303,7 @@ module.exports = function (app, express, router) {
   router.all('/openapi/:apiKey/slack', ctrl.Webhook.slack);
 
   app.use('/api', router);
+  app.get('/rss/:token', ctrl.RssProxy.proxy);
   app.use('/proxy/client/:client', clientProxy);
   app.use('/proxy/site/:site', siteProxy);
   app.use('/assets/styles/theme.less', (req, res) => {

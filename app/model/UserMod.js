@@ -61,6 +61,10 @@ class UserMod {
           title: 'IRC 自动下载',
           path: '/base/irc',
           icon: ['fas', 'tower-broadcast']
+        }, {
+          title: 'RSS 代理',
+          path: '/base/rssProxy',
+          icon: ['fas', 'share-nodes']
         }]
       }, {
         title: '规则组件',

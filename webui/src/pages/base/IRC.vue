@@ -35,7 +35,7 @@
           {{ (record.channels || []).length }}
         </template>
         <template v-if="column.dataIndex === 'client'">
-          {{ downloaders.filter(item => item.id === record.client).map(item => item.alias).join(' / ') }}
+          {{ downloaders.filter(item => (record.clientArr || []).indexOf(item.id) !== -1).map(item => item.alias).join(' / ') }}
         </template>
         <template v-if="column.title === '操作'">
           <span>
@@ -160,12 +160,45 @@
         </a-form-item>
         <a-form-item
           label="下载器"
-          name="client"
-          extra="匹配到的种子推送到该下载器"
+          name="clientArr"
+          extra="匹配到的种子按负载均衡推送到这些下载器"
           :rules="[{ required: true, message: '${label}不可为空! ' }]">
-          <a-select size="small" v-model:value="irc.client">
-            <a-select-option v-for="downloader of downloaders" v-model:value="downloader.id" :key="downloader.id">{{ downloader.alias }}</a-select-option>
+          <a-checkbox-group style="width: 100%;" v-model:value="irc.clientArr">
+            <a-row>
+              <a-col v-for="downloader of downloaders" :span="8" :key="downloader.id">
+                <a-checkbox :disabled="!downloader.enable && !irc.clientArr.includes(downloader.id)" v-model:value="downloader.id">{{ downloader.alias }}</a-checkbox>
+              </a-col>
+            </a-row>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-form-item
+          label="排序规则"
+          name="clientSortBy"
+          extra="负载均衡时按该字段选择下载器 (剩余空间为从大到小)">
+          <a-select size="small" v-model:value="irc.clientSortBy">
+            <a-select-option value="leechingCount">下载种子数量</a-select-option>
+            <a-select-option value="uploadSpeed">当前上传速度</a-select-option>
+            <a-select-option value="downloadSpeed">当前下载速度</a-select-option>
+            <a-select-option value="freeSpaceOnDisk">当前剩余空间</a-select-option>
           </a-select>
+        </a-form-item>
+        <a-form-item
+          label="下载器最高上传速度"
+          name="maxClientUploadSpeed"
+          extra="下载器上传速度高于此值时不选择, 留空或 0 不启用">
+          <a-input size="small" v-model:value="irc.maxClientUploadSpeed"/>
+        </a-form-item>
+        <a-form-item
+          label="下载器最高下载速度"
+          name="maxClientDownloadSpeed"
+          extra="下载器下载速度高于此值时不选择, 留空或 0 不启用">
+          <a-input size="small" v-model:value="irc.maxClientDownloadSpeed"/>
+        </a-form-item>
+        <a-form-item
+          label="下载器下载任务上限"
+          name="maxClientDownloadCount"
+          extra="下载器下载任务数高于此值时不选择, 留空或 0 不启用">
+          <a-input size="small" v-model:value="irc.maxClientDownloadCount"/>
         </a-form-item>
         <a-form-item
           label="保存路径"
@@ -367,7 +400,11 @@ export default {
         secure: true,
         channels: [],
         filters: [],
-        client: '',
+        clientArr: [],
+        clientSortBy: 'leechingCount',
+        maxClientUploadSpeed: '',
+        maxClientDownloadSpeed: '',
+        maxClientDownloadCount: '',
         savePath: '',
         category: '',
         uploadLimit: '',
@@ -430,6 +467,7 @@ export default {
       this.irc = JSON.parse(JSON.stringify(row));
       this.irc.channels = this.irc.channels || [];
       this.irc.filters = this.irc.filters || [];
+      this.irc.clientArr = this.irc.clientArr || (this.irc.client ? [this.irc.client] : []);
     },
     cloneClick (row) {
       this.irc = JSON.parse(JSON.stringify(row));

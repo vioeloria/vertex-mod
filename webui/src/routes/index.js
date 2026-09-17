@@ -11,6 +11,7 @@ import BaseDownloader from '@/pages/base/Downloader';
 import BaseSite from '@/pages/base/Site';
 import BaseNotification from '@/pages/base/Notification';
 import BaseIRC from '@/pages/base/IRC';
+import BaseRssProxy from '@/pages/base/RssProxy';
 
 import MetricServer from '@/pages/metric/Server';
 import MetricDownloader from '@/pages/metric/Downloader';
@@ -190,6 +191,12 @@ const base = {
       component: BaseIRC,
       meta: {
         title: 'IRC 自动下载 - 基础组件'
+      }
+    }, {
+      path: 'rssProxy',
+      component: BaseRssProxy,
+      meta: {
+        title: 'RSS 代理 - 基础组件'
       }
     }
   ]

@@ -15,6 +15,7 @@ import subscribe from './subscribe';
 import torrent from './torrent';
 import log from './log';
 import irc from './irc';
+import rssProxy from './rssProxy';
 
 const api = {
   user,
@@ -24,6 +25,7 @@ const api = {
   site,
   notification,
   irc,
+  rssProxy,
   deleteRule,
   linkRule,
   rssRule,

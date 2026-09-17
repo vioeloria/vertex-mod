@@ -145,7 +145,7 @@ const _importJson = function (path) {
 exports.initDataDirs = function () {
   const base = path.join(__dirname, '../data');
   const dirs = [
-    'rss', 'client', 'server', 'push', 'script', 'site', 'irc', 'race', 'ssl',
+    'rss', 'client', 'server', 'push', 'script', 'site', 'irc', 'race', 'ssl', 'rssproxy',
     'rule/delete', 'rule/rss', 'rule/race', 'rule/raceSet', 'rule/link',
     'watch/set', 'setting', 'douban/set'
   ];
@@ -421,6 +421,17 @@ exports.listRss = function () {
     }
   }
   return rssList;
+};
+
+exports.listRssProxy = function () {
+  const files = fs.readdirSync(path.join(__dirname, '../data/rssproxy'));
+  const proxyList = [];
+  for (const file of files) {
+    if (path.extname(file) === '.json') {
+      proxyList.push(_importJson(path.join(__dirname, '../data/rssproxy', file)));
+    }
+  }
+  return proxyList;
 };
 
 exports.listDeleteRule = function () {

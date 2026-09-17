@@ -24,7 +24,11 @@ class IRC {
     this.secure = irc.secure === undefined ? true : !!irc.secure;
     this.channels = irc.channels || [];
     this.filters = irc.filters || [];
-    this.clientId = irc.client;
+    this.clientArr = irc.clientArr || (irc.client ? [irc.client] : []);
+    this.clientSortBy = irc.clientSortBy || 'leechingCount';
+    this.maxClientUploadSpeed = util.calSize(irc.maxClientUploadSpeed, irc.maxClientUploadSpeedUnit);
+    this.maxClientDownloadSpeed = util.calSize(irc.maxClientDownloadSpeed, irc.maxClientDownloadSpeedUnit);
+    this.maxClientDownloadCount = +irc.maxClientDownloadCount;
     this.savePath = irc.savePath;
     this.category = irc.category;
     this.uploadLimit = util.calSize(irc.uploadLimit, irc.uploadLimitUnit);
@@ -186,10 +190,31 @@ class IRC {
     return { filepath, hash };
   }
 
+  _pickClient () {
+    const availableClients = this.clientArr
+      .map(item => global.runningClient[item])
+      .filter(item => {
+        return !!item && !!item.status && !!item.maindata &&
+          (!this.maxClientUploadSpeed || this.maxClientUploadSpeed > item.avgUploadSpeed) &&
+          (!this.maxClientDownloadSpeed || this.maxClientDownloadSpeed > item.avgDownloadSpeed) &&
+          (!this.maxClientDownloadCount || this.maxClientDownloadCount > item.maindata.leechingCount);
+      });
+    return availableClients
+      .filter(item => {
+        return (!item.maxDownloadSpeed || item.maxDownloadSpeed > item.avgDownloadSpeed) &&
+          (!item.maxUploadSpeed || item.maxUploadSpeed > item.avgUploadSpeed) &&
+          (!item.maxLeechNum || item.maxLeechNum > item.maindata.leechingCount) &&
+          (!item.minFreeSpace || item.minFreeSpace < item.maindata.freeSpaceOnDisk);
+      })
+      .sort((a, b) => (this.clientSortBy === 'freeSpaceOnDisk' ? -1 : 1) *
+        (a.maindata[this.clientSortBy] - b.maindata[this.clientSortBy])
+      )[0] || availableClients[0];
+  }
+
   async _push (torrent) {
-    const client = global.runningClient[this.clientId];
+    const client = this._pickClient();
     if (!client) {
-      logger.error('IRC', this.alias, '下载器不存在:', this.clientId);
+      logger.error('IRC', this.alias, '无可用下载器');
       return false;
     }
     const dedupKey = `vertex:irc:added:${this.id}:${util.md5(torrent.title)}`;
