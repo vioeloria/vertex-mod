@@ -36,6 +36,7 @@ class IRC {
     this.skipChecking = !!irc.skipChecking;
     this.paused = !!irc.paused;
     this.pushTorrentFile = !!irc.pushTorrentFile;
+    this.checkSize = !!irc.checkSize;
     this.tag = irc.tag || 'IRC';
     this.dryrun = !!irc.dryrun;
     this.status = false;
@@ -232,6 +233,7 @@ class IRC {
     });
     const buffer = Buffer.from(res.body, 'utf-8');
     const torrent = bencode.decode(buffer);
+    const size = torrent.info.length || torrent.info.files.map(i => i.length).reduce((a, b) => a + b, 0);
     const fsHash = crypto.createHash('sha1');
     fsHash.update(bencode.encode(torrent.info));
     const digest = fsHash.digest();
@@ -245,7 +247,7 @@ class IRC {
     }
     const filepath = path.join(dir, hash + '.torrent');
     fs.writeFileSync(filepath, buffer);
-    return { filepath, hash };
+    return { filepath, hash, size, name: torrent.info.name ? torrent.info.name.toString() : '' };
   }
 
   _pickClient () {
@@ -283,7 +285,9 @@ class IRC {
     await redis.setWithExpire(dedupKey, '1', 3600 * 24);
     try {
       let hash = torrent.hash;
-      if (this.pushTorrentFile) {
+      if (torrent.filepath) {
+        await client.addTorrentByTorrentFile(torrent.filepath, hash, this.skipChecking, this.uploadLimit, this.downloadLimit, this.savePath, this.category, false, this.paused);
+      } else if (this.pushTorrentFile) {
         const res = await this._downloadTorrent(torrent.url);
         hash = res.hash;
         await client.addTorrentByTorrentFile(res.filepath, hash, this.skipChecking, this.uploadLimit, this.downloadLimit, this.savePath, this.category, false, this.paused);
@@ -307,6 +311,16 @@ class IRC {
   }
 
   async _handleTorrent (torrent, channel) {
+    if (this.checkSize && torrent.url) {
+      try {
+        const info = await this._downloadTorrent(torrent.url);
+        torrent.size = info.size;
+        torrent.hash = info.hash || torrent.hash;
+        torrent.filepath = info.filepath;
+      } catch (e) {
+        logger.error('IRC', this.alias, '获取种子实际大小失败:', torrent.title, '\n', e);
+      }
+    }
     const matched = this._fitFilters(torrent);
     const record = {
       time: moment().format('MM-DD HH:mm:ss'),

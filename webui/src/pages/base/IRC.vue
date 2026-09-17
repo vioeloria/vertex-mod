@@ -258,6 +258,12 @@
           <a-checkbox v-model:checked="irc.pushTorrentFile">推送种子文件</a-checkbox>
         </a-form-item>
         <a-form-item
+          label="获取实际大小"
+          name="checkSize"
+          extra="推送前先下载种子文件并解析 bencode 得到真实文件大小, 用于过滤器中的 size 条件 (会多一次下载请求)">
+          <a-checkbox v-model:checked="irc.checkSize">获取种子实际大小</a-checkbox>
+        </a-form-item>
+        <a-form-item
           label="添加时暂停"
           name="paused">
           <a-checkbox v-model:checked="irc.paused">添加种子时暂停</a-checkbox>
@@ -420,6 +426,7 @@ export default {
         downloadLimitUnit: 'KiB',
         skipChecking: false,
         pushTorrentFile: false,
+        checkSize: false,
         paused: false,
         tag: 'IRC'
       },
