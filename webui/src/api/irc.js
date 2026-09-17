@@ -12,5 +12,13 @@ export default {
   delete: async (id) => {
     const url = '/api/irc/delete';
     return await post(url, { id });
+  },
+  test: async (irc) => {
+    const url = '/api/irc/test';
+    return await post(url, irc);
+  },
+  messages: async (id) => {
+    const url = '/api/irc/messages?id=' + id + '&_=' + Math.random();
+    return await get(url);
   }
 };

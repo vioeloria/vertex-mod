@@ -166,6 +166,8 @@ module.exports = function (app, express, router) {
   router.get('/irc/list', ctrl.IRC.list);
   router.post('/irc/modify', ctrl.IRC.modify);
   router.post('/irc/delete', ctrl.IRC.delete);
+  router.post('/irc/test', ctrl.IRC.test);
+  router.get('/irc/messages', ctrl.IRC.messages);
 
   router.post('/site/add', ctrl.Site.add);
   router.get('/site/list', ctrl.Site.list);

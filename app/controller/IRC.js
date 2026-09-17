@@ -70,5 +70,39 @@ class IRC {
       });
     }
   };
+
+  async test (req, res) {
+    const options = req.body;
+    try {
+      const r = await ircMod.test(options);
+      res.send({
+        success: true,
+        data: r
+      });
+    } catch (e) {
+      logger.error(e);
+      res.send({
+        success: false,
+        message: e.message
+      });
+    }
+  };
+
+  async messages (req, res) {
+    const options = req.query;
+    try {
+      const r = await ircMod.messages(options);
+      res.send({
+        success: true,
+        data: r
+      });
+    } catch (e) {
+      logger.error(e);
+      res.send({
+        success: false,
+        message: e.message
+      });
+    }
+  };
 }
 module.exports = IRC;

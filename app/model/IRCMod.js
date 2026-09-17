@@ -3,6 +3,7 @@ const path = require('path');
 const IRC = require('../common/IRC');
 
 const util = require('../libs/util');
+const redis = require('../libs/redis');
 class IRCMod {
   add (options) {
     const id = util.uuid.v4().split('-')[0];
@@ -40,6 +41,40 @@ class IRCMod {
       irc.status = !!(global.runningIRC[irc.id] && global.runningIRC[irc.id].status);
     }
     return ircList;
+  };
+
+  async test (options) {
+    const set = { ...options };
+    set.id = 'test-' + util.uuid.v4().split('-')[0];
+    set.enable = true;
+    set.dryrun = true;
+    const irc = new IRC(set);
+    const seconds = Math.min(60, Math.max(5, +options.testSeconds || 20));
+    await util.sleep(seconds * 1000);
+    const result = {
+      status: irc.status,
+      joinedChannels: irc.joinedChannels,
+      messages: irc.messages
+    };
+    irc.destroy();
+    return result;
+  };
+
+  async messages (options) {
+    const irc = global.runningIRC[options.id];
+    if (irc) {
+      return {
+        status: irc.status,
+        joinedChannels: irc.joinedChannels,
+        messages: irc.messages
+      };
+    }
+    const cache = await redis.get(`vertex:irc:msg:${options.id}`);
+    return {
+      status: false,
+      joinedChannels: [],
+      messages: cache ? JSON.parse(cache) : []
+    };
   };
 }
 

@@ -39,6 +39,8 @@
         </template>
         <template v-if="column.title === '操作'">
           <span>
+            <a @click="previewIrc(record)">预览</a>
+            <a-divider type="vertical" />
             <a @click="modifyClick(record)">编辑</a>
             <a-divider type="vertical" />
             <a @click="cloneClick(record)">克隆</a>
@@ -210,6 +212,12 @@
           <a-checkbox v-model:checked="irc.skipChecking">跳过校验</a-checkbox>
         </a-form-item>
         <a-form-item
+          label="推送种子文件"
+          name="pushTorrentFile"
+          extra="勾选后先下载种子文件再推送(适合需要 Cookie 的站点), 否则直接推送种子链接">
+          <a-checkbox v-model:checked="irc.pushTorrentFile">推送种子文件</a-checkbox>
+        </a-form-item>
+        <a-form-item
           label="添加时暂停"
           name="paused">
           <a-checkbox v-model:checked="irc.paused">添加种子时暂停</a-checkbox>
@@ -224,10 +232,48 @@
           :wrapperCol="isMobile() ? { span:24 } : { span: 21, offset: 3 }">
           <a-button type="primary" html-type="submit" style="margin-top: 24px; margin-bottom: 48px;">应用 | 完成</a-button>
           <a-button style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" @click="clearIrc()">清空</a-button>
+          <a-button type="primary" style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" :loading="testing" @click="testIrc()">测试连接并预览</a-button>
         </a-form-item>
       </a-form>
     </div>
   </div>
+  <a-modal
+    v-model:visible="previewVisible"
+    title="IRC 连接测试 / 频道预览"
+    width="1200px"
+    :footer="null"
+    @cancel="closePreview()">
+    <div style="text-align: left; ">
+      <a-alert type="info" style="margin-bottom: 12px;">
+        <template #description>
+          连接状态: <b>{{ previewData.status ? '已连接' : '未连接' }}</b>
+          &nbsp;|&nbsp; 已加入频道: <b>{{ (previewData.joinedChannels || []).join(', ') || '无' }}</b>
+          &nbsp;|&nbsp; 共 {{ (previewData.messages || []).length }} 条记录
+        </template>
+      </a-alert>
+      <a-table
+        :columns="messageColumns"
+        size="small"
+        :data-source="previewData.messages"
+        :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 900 }"
+        row-key="time">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'size'">
+            {{ record.size ? $formatSize(record.size) : '-' }}
+          </template>
+          <template v-if="column.dataIndex === 'matched'">
+            <a-tag :color="record.matched ? 'success' : 'default'">{{ record.matched ? '匹配' : '未匹配' }}</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'pushed'">
+            <a-tag color="success" v-if="record.pushed">已推送</a-tag>
+            <a-tag color="orange" v-else-if="record.parsed === false">原始消息</a-tag>
+            <a-tag v-else>未推送</a-tag>
+          </template>
+        </template>
+      </a-table>
+    </div>
+  </a-modal>
 </template>
 <script>
 export default {
@@ -269,11 +315,47 @@ export default {
         width: 28
       }
     ];
+    const messageColumns = [
+      {
+        title: '时间',
+        dataIndex: 'time',
+        width: 110
+      }, {
+        title: '频道',
+        dataIndex: 'channel',
+        width: 130
+      }, {
+        title: '标题 / 内容',
+        dataIndex: 'title'
+      }, {
+        title: '大小',
+        dataIndex: 'size',
+        width: 90
+      }, {
+        title: '匹配',
+        dataIndex: 'matched',
+        width: 70
+      }, {
+        title: '状态',
+        dataIndex: 'pushed',
+        width: 80
+      }
+    ];
     return {
       columns,
+      messageColumns,
       ircList: [],
       downloaders: [],
       irc: {},
+      previewVisible: false,
+      previewId: null,
+      previewTimer: null,
+      previewData: {
+        status: false,
+        joinedChannels: [],
+        messages: []
+      },
+      testing: false,
       defaultIrc: {
         alias: '',
         enable: false,
@@ -293,6 +375,7 @@ export default {
         downloadLimit: '',
         downloadLimitUnit: 'KiB',
         skipChecking: false,
+        pushTorrentFile: false,
         paused: false,
         tag: 'IRC'
       },
@@ -364,12 +447,53 @@ export default {
     },
     clearIrc () {
       this.irc = JSON.parse(JSON.stringify(this.defaultIrc));
+    },
+    async testIrc () {
+      this.testing = true;
+      try {
+        const res = await this.$api().irc.test({ ...this.irc, testSeconds: 20 });
+        this.previewId = null;
+        this.previewData = res.data;
+        this.previewVisible = true;
+      } catch (e) {
+        this.$message().error(e.message);
+      } finally {
+        this.testing = false;
+      }
+    },
+    async previewIrc (row) {
+      this.previewId = row.id;
+      this.previewData = { status: row.status, joinedChannels: [], messages: [] };
+      this.previewVisible = true;
+      await this.loadMessages();
+      if (this.previewTimer) clearInterval(this.previewTimer);
+      this.previewTimer = setInterval(() => this.loadMessages(), 3000);
+    },
+    async loadMessages () {
+      if (!this.previewId) return;
+      try {
+        const res = await this.$api().irc.messages(this.previewId);
+        this.previewData = res.data;
+      } catch (e) {
+        this.$message().error(e.message);
+      }
+    },
+    closePreview () {
+      this.previewVisible = false;
+      this.previewId = null;
+      if (this.previewTimer) {
+        clearInterval(this.previewTimer);
+        this.previewTimer = null;
+      }
     }
   },
   async mounted () {
     this.clearIrc();
     this.listDownloader();
     this.listIrc();
+  },
+  beforeUnmount () {
+    if (this.previewTimer) clearInterval(this.previewTimer);
   }
 };
 </script>

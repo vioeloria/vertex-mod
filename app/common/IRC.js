@@ -1,4 +1,9 @@
 /* eslint-disable no-control-regex */
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const bencode = require('bencode');
+const moment = require('moment');
 const logger = require('../libs/logger');
 const util = require('../libs/util');
 const redis = require('../libs/redis');
@@ -26,9 +31,18 @@ class IRC {
     this.downloadLimit = util.calSize(irc.downloadLimit, irc.downloadLimitUnit);
     this.skipChecking = !!irc.skipChecking;
     this.paused = !!irc.paused;
+    this.pushTorrentFile = !!irc.pushTorrentFile;
     this.tag = irc.tag || 'IRC';
+    this.dryrun = !!irc.dryrun;
     this.status = false;
     this.client = null;
+    this.joinedChannels = [];
+    this.messages = [];
+    redis.get(`vertex:irc:msg:${this.id}`).then(cache => {
+      if (cache && this.messages.length === 0) {
+        this.messages = JSON.parse(cache);
+      }
+    }).catch(() => {});
     this.initIRC();
   }
 
@@ -108,6 +122,17 @@ class IRC {
     }
   }
 
+  _record (record) {
+    this.messages.unshift(record);
+    if (this.messages.length > 200) {
+      this.messages.length = 200;
+    }
+    if (!this.dryrun) {
+      redis.setWithExpire(`vertex:irc:msg:${this.id}`, JSON.stringify(this.messages), 3600 * 24 * 7)
+        .catch(e => logger.error('IRC 记录保存失败\n', e));
+    }
+  }
+
   _parseAnnounce (channel, message) {
     const formatMessage = message
       .replace(/\x02\d{2}([^\d])/g, '$1')
@@ -121,10 +146,7 @@ class IRC {
       logger.error('IRC', this.alias, '播报正则错误\n', e);
       return null;
     }
-    if (!regRes) {
-      logger.info('IRC', this.alias, '无法解析播报:', formatMessage);
-      return null;
-    }
+    if (!regRes) return null;
     const groups = regRes.groups || {};
     const title = groups.title || regRes[1];
     const link = groups.link || regRes[2];
@@ -140,65 +162,130 @@ class IRC {
     };
   }
 
+  async _downloadTorrent (url) {
+    const res = await util.requestPromise({
+      url,
+      method: 'GET',
+      encoding: null
+    });
+    const buffer = Buffer.from(res.body, 'utf-8');
+    const torrent = bencode.decode(buffer);
+    const fsHash = crypto.createHash('sha1');
+    fsHash.update(bencode.encode(torrent.info));
+    const digest = fsHash.digest();
+    let hash = '';
+    for (const v of digest) {
+      hash += v < 16 ? '0' + v.toString(16) : v.toString(16);
+    }
+    const dir = path.join(__dirname, '../../torrents');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const filepath = path.join(dir, hash + '.torrent');
+    fs.writeFileSync(filepath, buffer);
+    return { filepath, hash };
+  }
+
   async _push (torrent) {
     const client = global.runningClient[this.clientId];
     if (!client) {
       logger.error('IRC', this.alias, '下载器不存在:', this.clientId);
-      return;
+      return false;
     }
-    const dedupKey = `vertex:irc:${this.id}:${util.md5(torrent.title)}`;
+    const dedupKey = `vertex:irc:added:${this.id}:${util.md5(torrent.title)}`;
     if (await redis.get(dedupKey)) {
       logger.debug('IRC', this.alias, '重复播报, 跳过:', torrent.title);
-      return;
+      return false;
     }
     await redis.setWithExpire(dedupKey, '1', 3600 * 24);
     try {
-      await client.addTorrent(torrent.url, torrent.hash, this.skipChecking, this.uploadLimit, this.downloadLimit, this.savePath, this.category, false, this.paused);
-      if (torrent.hash) {
+      let hash = torrent.hash;
+      if (this.pushTorrentFile) {
+        const res = await this._downloadTorrent(torrent.url);
+        hash = res.hash;
+        await client.addTorrentByTorrentFile(res.filepath, hash, this.skipChecking, this.uploadLimit, this.downloadLimit, this.savePath, this.category, false, this.paused);
+      } else {
+        await client.addTorrent(torrent.url, hash, this.skipChecking, this.uploadLimit, this.downloadLimit, this.savePath, this.category, false, this.paused);
+      }
+      if (hash) {
         await util.sleep(1000);
         try {
-          await client.addTorrentTag(torrent.hash, `${this.alias}_${this.tag}`);
+          await client.addTorrentTag(hash, `${this.alias}_${this.tag}`);
         } catch (e) {
           logger.error('IRC', this.alias, '打标签失败:', torrent.title, '\n', e);
         }
       }
       logger.info('IRC', this.alias, '添加种子成功:', torrent.title);
+      return true;
     } catch (e) {
       logger.error('IRC', this.alias, '添加种子失败:', torrent.title, '\n', e);
+      return false;
     }
   }
 
-  async _handleTorrent (torrent) {
-    if (!this._fitFilters(torrent)) {
-      logger.debug('IRC', this.alias, '未匹配过滤器, 跳过:', torrent.title);
+  async _handleTorrent (torrent, channel) {
+    const matched = this._fitFilters(torrent);
+    const record = {
+      time: moment().format('MM-DD HH:mm:ss'),
+      channel: channel.channel || '',
+      nick: channel.announcer || '',
+      title: torrent.title,
+      size: torrent.size,
+      link: torrent.link,
+      url: torrent.url,
+      matched,
+      pushed: false
+    };
+    this._record(record);
+    if (this.dryrun || !matched) return;
+    record.pushed = await this._push(torrent);
+  }
+
+  _recordRaw (channel, message) {
+    this._record({
+      time: moment().format('MM-DD HH:mm:ss'),
+      channel: channel.channel || '',
+      nick: channel.announcer || '',
+      title: message,
+      size: 0,
+      matched: false,
+      parsed: false
+    });
+  }
+
+  _processMessage (channel, text) {
+    if (channel.welcomeText && text === channel.welcomeText) {
+      logger.info('IRC', this.alias, '已进入 Announce 频道:', channel.channel);
       return;
     }
-    await this._push(torrent);
+    const torrent = this._parseAnnounce(channel, text);
+    if (!torrent) {
+      this._recordRaw(channel, text);
+      return;
+    }
+    this._handleTorrent(torrent, channel).catch(e => logger.error('IRC', this.alias, '\n', e));
   }
 
   handleMessage (message) {
+    const text = message.args[1];
     if (message.command === 'NOTICE') {
-      const notice = message.args[1] || '';
+      const notice = text || '';
       if (message.nick === 'NickServ' && notice === 'please choose a different nick.') {
         this.client.say('NickServ', `IDENTIFY ${this.password}`);
       }
       if (message.nick === 'NickServ' && notice.indexOf('Password accepted') !== -1) {
         this._joinChannels();
       }
+      const noticeChannel = this.channels.find(item => item.announcer === message.nick);
+      if (noticeChannel && notice) {
+        this._processMessage(noticeChannel, notice);
+      }
       return;
     }
-    if (message.command !== 'PRIVMSG') return;
-    const text = message.args[1];
-    if (!text) return;
+    if (message.command !== 'PRIVMSG' || !text) return;
     const channel = this.channels.find(item => item.announcer === message.nick || item.channel === message.args[0]);
     if (!channel) return;
-    if (channel.welcomeText && text === channel.welcomeText) {
-      logger.info('IRC', this.alias, '已进入 Announce 频道:', channel.channel);
-      return;
-    }
-    const torrent = this._parseAnnounce(channel, text);
-    if (!torrent) return;
-    this._handleTorrent(torrent).catch(e => logger.error('IRC', this.alias, '\n', e));
+    this._processMessage(channel, text);
   }
 
   _joinChannels () {
@@ -230,6 +317,16 @@ class IRC {
         this.status = true;
         logger.info('IRC', this.alias, '连接成功:', this.host);
         this._joinChannels();
+      });
+      this.client.on('invite', (channel) => {
+        logger.info('IRC', this.alias, '收到邀请, 加入频道:', channel);
+        this.client.join(channel);
+      });
+      this.client.on('join', (channel, nick) => {
+        if (nick === this.client.nick && this.joinedChannels.indexOf(channel) === -1) {
+          this.joinedChannels.push(channel);
+          logger.info('IRC', this.alias, '已加入频道:', channel);
+        }
       });
       this.client.on('raw', (message) => this.handleMessage(message));
       this.client.on('error', (error) => {
