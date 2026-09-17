@@ -46,6 +46,8 @@ class Client {
       this.reannounceJob = cron.schedule('3 * * * * *', () => this.autoReannounce());
     }
     this.reannouncedHash = [];
+    this.reannounceAfter = +client.reannounceAfter || 300;
+    this.reannounceWindow = +client.reannounceWindow || 60;
     this._deleteRules = client.deleteRules;
     this.deleteRules = util.listDeleteRule().filter(item => this._deleteRules.indexOf(item.id) !== -1).sort((a, b) => b.priority - a.priority);
     this._rejectDeleteRules = client.rejectDeleteRules || [];
@@ -357,14 +359,14 @@ class Client {
       [hash, 0, 0, moment().unix() - moment().unix() % 300]);
   };
 
-  async reannounceTorrent (torrent) {
+  async reannounceTorrent (torrent, notify = true) {
     try {
       await this.client.reannounceTorrent(this.clientUrl, this.cookie, torrent.hash);
       logger.info('下载器', this.alias, '重新汇报种子成功:', torrent.name);
-      this.ntf.reannounceTorrent(this._client, torrent);
+      if (notify) this.ntf.reannounceTorrent(this._client, torrent);
     } catch (error) {
       logger.error('下载器', this.alias, '重新汇报种子失败:', torrent.name, '\n', error.message);
-      this.ntf.reannounceTorrentError(this._client, torrent);
+      if (notify) this.ntf.reannounceTorrentError(this._client, torrent);
     }
   };
 
@@ -400,6 +402,7 @@ class Client {
   async autoReannounce () {
     if (!this.maindata) return;
     logger.debug(this.alias, moment().format(), '启动重新汇报任务');
+    const now = moment().unix();
     for (const torrent of this.maindata.torrents) {
       if (!torrent.tracker || torrent.tracker.indexOf('btschool') !== -1) {
         continue;
@@ -407,8 +410,8 @@ class Client {
       if (this.reannouncedHash.includes(torrent.hash)) {
         continue;
       }
-      const now = moment().unix();
-      if (now - torrent.addedTime <= 360 && now - torrent.addTime >= 300) {
+      const age = now - torrent.addedTime;
+      if (age >= this.reannounceAfter && age <= this.reannounceAfter + this.reannounceWindow) {
         await this.reannounceTorrent(torrent);
         this.reannouncedHash.push(torrent.hash);
       }

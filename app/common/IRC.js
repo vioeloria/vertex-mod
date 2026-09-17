@@ -41,6 +41,7 @@ class IRC {
     this.paused = !!irc.paused;
     this.pushTorrentFile = !!irc.pushTorrentFile;
     this.checkSize = !!irc.checkSize;
+    this.quickReannounce = +irc.quickReannounce || 0;
     this.tag = irc.tag || 'IRC';
     this.dryrun = !!irc.dryrun;
     this.status = false;
@@ -338,6 +339,19 @@ class IRC {
         } catch (e) {
           logger.error('IRC', this.alias, '打标签失败:', torrent.title, '\n', e);
         }
+        if (this.quickReannounce > 0) {
+          const _hash = hash;
+          const _name = torrent.title;
+          setTimeout(() => {
+            try {
+              client.reannounceTorrent({ hash: _hash, name: _name }, false);
+            } catch (e) {
+              logger.error('IRC', this.alias, '快速汇报失败:', _name, '\n', e);
+            }
+          }, this.quickReannounce * 1000);
+        }
+      } else if (this.quickReannounce > 0) {
+        logger.warn('IRC', this.alias, '无法快速汇报(缺少真实 hash), 请开启「推送种子文件」或「获取实际大小」:', torrent.title);
       }
       logger.info('IRC', this.alias, '添加种子成功:', torrent.title);
       return true;

@@ -165,9 +165,23 @@
         <a-form-item
           label="自动汇报"
           name="autoReannounce"
-          extra="自动在种子添加后的第 5 分钟时汇报一次, 获取更多 Peers"
+          extra="种子添加后自动汇报一次, 获取更多 Peers"
           :rules="[{ required: true, message: '${label}不可为空! ' }]">
           <a-checkbox v-model:checked="downloader.autoReannounce">自动汇报</a-checkbox>
+        </a-form-item>
+        <a-form-item
+          v-if="downloader.autoReannounce"
+          label="汇报时间"
+          name="reannounceAfter"
+          extra="种子添加后多少秒汇报, 默认 300 (5 分钟); 周期任务每秒检查一次, 命中后只汇报一次">
+          <a-input size="small" v-model:value="downloader.reannounceAfter"/>
+        </a-form-item>
+        <a-form-item
+          v-if="downloader.autoReannounce"
+          label="汇报窗口"
+          name="reannounceWindow"
+          extra="允许汇报的时间窗口秒数, 默认 60, 避免漏掉">
+          <a-input size="small" v-model:value="downloader.reannounceWindow"/>
         </a-form-item>
         <a-form-item
           label="先下载首尾文件块"
@@ -353,6 +367,8 @@ export default {
         cron: '*/4 * * * * *',
         autoDeleteCron: '* * * * *',
         autoReannounce: true,
+        reannounceAfter: 300,
+        reannounceWindow: 60,
         autoDelete: true,
         deleteRules: []
       },

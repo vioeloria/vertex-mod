@@ -293,6 +293,12 @@
           <a-checkbox v-model:checked="irc.paused">添加种子时暂停</a-checkbox>
         </a-form-item>
         <a-form-item
+          label="快速汇报"
+          name="quickReannounce"
+          extra="添加种子后 N 秒自动向 tracker 汇报一次, 尽快获得 peers; 0 关闭 (需开启「推送种子文件」或「获取实际大小」才能拿到真实 hash)">
+          <a-input size="small" v-model:value="irc.quickReannounce"/>
+        </a-form-item>
+        <a-form-item
           label="标签"
           name="tag"
           extra="添加种子后打的标签, 完整标签为 别名_标签">
@@ -458,6 +464,7 @@ export default {
         skipChecking: false,
         pushTorrentFile: false,
         checkSize: false,
+        quickReannounce: 0,
         paused: false,
         tag: 'IRC'
       },
