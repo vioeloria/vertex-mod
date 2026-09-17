@@ -142,6 +142,37 @@ const _importJson = function (path) {
   return JSON.parse(jsonString);
 };
 
+exports.initDataDirs = function () {
+  const base = path.join(__dirname, '../data');
+  const dirs = [
+    'rss', 'client', 'server', 'push', 'script', 'site', 'irc', 'race', 'ssl',
+    'rule/delete', 'rule/rss', 'rule/race', 'rule/raceSet', 'rule/link',
+    'watch/set', 'setting', 'douban/set'
+  ];
+  for (const dir of dirs) {
+    const full = path.join(base, dir);
+    if (!fs.existsSync(full)) {
+      fs.mkdirSync(full, { recursive: true });
+    }
+  }
+  const defaults = {
+    'link-mapping.json': '{}',
+    'bulk-link-history.json': '{}',
+    'setting.json': '{}',
+    'setting/proxy.json': '{}',
+    'setting/torrent-history-setting.json': '{}',
+    'setting/torrent-mix-setting.json': '{}',
+    'setting/torrent-push-setting.json': '{}',
+    'setting/site-push-setting.json': '{}'
+  };
+  for (const file of Object.keys(defaults)) {
+    const full = path.join(base, file);
+    if (!fs.existsSync(full)) {
+      fs.writeFileSync(full, defaults[file]);
+    }
+  }
+};
+
 exports.scrapeFree = scrape.free;
 exports.scrapeHr = scrape.hr;
 

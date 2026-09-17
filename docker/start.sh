@@ -6,54 +6,10 @@ if [ -d '/tmp/vertex' ]; then
   rm -rf /tmp/vertex
 fi
 
-if [ ! -d '/vertex/data' ]; then
-  mkdir /vertex/data/rss -p
-  mkdir /vertex/data/client
-  mkdir /vertex/data/server
-  mkdir /vertex/data/rule/delete -p
-  mkdir /vertex/data/rule/rss
-  mkdir /vertex/data/push
-fi
-
-if [ ! -d '/vertex/data/rule/race' ]; then
-  mkdir /vertex/data/rule/race
-fi
-
-if [ ! -d '/vertex/data/script' ]; then
-  mkdir /vertex/data/script
-fi
-
-if [ ! -d '/vertex/data/watch' ]; then
-  mkdir /vertex/data/watch/set -p
-fi
-
-if [ ! -d '/vertex/data/rule/raceSet' ]; then
-  mkdir /vertex/data/rule/raceSet
-fi
-
-if [ ! -d '/vertex/data/rule/link' ]; then
-  mkdir /vertex/data/rule/link
-fi
-
-if [ ! -d '/vertex/data/site' ]; then
-  mkdir /vertex/data/site
-fi
-
-if [ ! -d '/vertex/data/irc' ]; then
-  mkdir /vertex/data/irc
-fi
-
-if [ ! -d '/vertex/data/race' ]; then
-  mkdir /vertex/data/race
-fi
-
-if [ ! -d '/vertex/data/setting' ]; then
-  mkdir /vertex/data/setting
-fi
-
-if [ ! -d '/vertex/data/douban' ]; then
-  mkdir /vertex/data/douban/set -p
-fi
+mkdir -p /vertex/data/rss /vertex/data/client /vertex/data/server /vertex/data/push \
+  /vertex/data/script /vertex/data/site /vertex/data/irc /vertex/data/race /vertex/data/ssl \
+  /vertex/data/rule/delete /vertex/data/rule/rss /vertex/data/rule/race /vertex/data/rule/raceSet /vertex/data/rule/link \
+  /vertex/data/watch/set /vertex/data/setting /vertex/data/douban/set
 
 if [ ! -d '/vertex/db' ]; then
   mkdir /vertex/db

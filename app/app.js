@@ -38,6 +38,7 @@ const initPush = function () {
 };
 
 const init = function () {
+  util.initDataDirs();
   global.clearDatabase = cron.schedule('1 0 * * *', async () => {
     try {
       await util.runRecord('delete from torrent_flow where time < ?', [moment().unix() - 1]);
