@@ -138,5 +138,22 @@ class Rss {
       });
     }
   };
+
+  async reseedPreview (req, res) {
+    const options = req.body;
+    try {
+      const r = await rssMod.reseedPreview(options);
+      res.send({
+        success: true,
+        data: r
+      });
+    } catch (e) {
+      logger.error(e);
+      res.send({
+        success: false,
+        message: e.message
+      });
+    }
+  };
 }
 module.exports = Rss;

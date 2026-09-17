@@ -367,6 +367,7 @@
           <a-button type="primary" html-type="submit" style="margin-top: 24px; margin-bottom: 48px;">应用 | 完成</a-button>
           <a-button style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" @click="clearRss()">清空</a-button>
           <a-button type="primary" style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" @click="dryrun()">试运行</a-button>
+          <a-button type="primary" danger style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" :loading="reseedPreviewLoading" @click="reseedPreview()">辅种预览</a-button>
         </a-form-item>
       </a-form>
     </div>
@@ -418,6 +419,35 @@
       </a-form>
     </div>
   </a-modal>
+  <a-modal
+    v-model:visible="reseedPreviewVisible"
+    title="辅种匹配预览"
+    width="1200px"
+    :footer="null">
+    <div style="text-align: left; ">
+      <a-alert message="说明" type="info" style="margin-bottom: 12px;">
+        <template #description>
+          阈值: {{ rss.reseedProgress || 50 }}% | 匹配方式: 仅名称一致 | 目标: 已存在同名种子的下载器。
+          展示 RSS 缓存内容与各下载器同名种子的对比情况, 不会实际推送。
+        </template>
+      </a-alert>
+      <a-table
+        :columns="reseedColumns"
+        size="small"
+        :data-source="reseedRows"
+        :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 900 }">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'size'">
+            {{ $formatSize(record.size) }}
+          </template>
+          <template v-if="column.dataIndex === 'status'">
+            <a-tag :color="record.status === '✔ 可辅种' ? 'success' : 'default'">{{ record.status }}</a-tag>
+          </template>
+        </template>
+      </a-table>
+    </div>
+  </a-modal>
 </template>
 <script>
 export default {
@@ -466,10 +496,41 @@ export default {
         width: 28
       }
     ];
+    const reseedColumns = [
+      {
+        title: '种子名',
+        dataIndex: 'name',
+        width: 160
+      }, {
+        title: '大小',
+        dataIndex: 'size',
+        width: 14
+      }, {
+        title: '下载器',
+        dataIndex: 'client',
+        width: 24
+      }, {
+        title: '进度',
+        dataIndex: 'progress',
+        width: 16
+      }, {
+        title: '状态',
+        dataIndex: 'status',
+        width: 30
+      }, {
+        title: '结果',
+        dataIndex: 'result',
+        width: 30
+      }
+    ];
     return {
       columns,
       dryrunColumns,
+      reseedColumns,
       modalVisible: false,
+      reseedPreviewVisible: false,
+      reseedPreviewLoading: false,
+      reseedPreviewList: [],
       rssList: [],
       downloaders: [],
       notifications: [],
@@ -499,6 +560,35 @@ export default {
       loading: true,
       registCode: []
     };
+  },
+  computed: {
+    reseedRows () {
+      const rows = [];
+      for (const item of this.reseedPreviewList || []) {
+        if (item.candidates && item.candidates.length > 0) {
+          for (const c of item.candidates) {
+            rows.push({
+              name: item.name,
+              size: item.size,
+              client: c.client,
+              progress: c.progress + '%',
+              status: c.status,
+              result: item.result
+            });
+          }
+        } else {
+          rows.push({
+            name: item.name,
+            size: item.size,
+            client: '-',
+            progress: '-',
+            status: '无同名种子',
+            result: item.result
+          });
+        }
+      }
+      return rows;
+    }
   },
   methods: {
     isMobile () {
@@ -557,6 +647,18 @@ export default {
         this.modalVisible = true;
       } catch (e) {
         this.$message().error(e.message);
+      }
+    },
+    async reseedPreview () {
+      this.reseedPreviewLoading = true;
+      try {
+        const res = await this.$api().rss.reseedPreview({ ...this.rss });
+        this.reseedPreviewList = res.data;
+        this.reseedPreviewVisible = true;
+      } catch (e) {
+        this.$message().error(e.message);
+      } finally {
+        this.reseedPreviewLoading = false;
       }
     },
     async enableTask (record) {

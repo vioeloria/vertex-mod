@@ -28,5 +28,9 @@ export default {
   mikanPush: async (body) => {
     const url = '/api/rss/mikanPush';
     return await post(url, body);
+  },
+  reseedPreview: async (rss) => {
+    const url = '/api/rss/reseedPreview';
+    return await post(url, rss);
   }
 };

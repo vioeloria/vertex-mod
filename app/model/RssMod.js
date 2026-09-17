@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Rss = require('../common/Rss');
+const rssLib = require('../libs/rss');
 
 const util = require('../libs/util');
 class RssMod {
@@ -79,6 +80,21 @@ class RssMod {
     const rss = new Rss(rssSet);
     rss.rss(options.torrents);
     return '任务已开始执行。';
+  };
+
+  async reseedPreview (options) {
+    const rssSet = { ...options };
+    if (!rssSet.rssUrls || rssSet.rssUrls.length === 0) return [];
+    rssSet.id = rssSet.id || 'preview';
+    rssSet.dryrun = true;
+    const rss = new Rss(rssSet);
+    const torrents = (await Promise.all(rss.urls.map(url => rssLib.getTorrents(url)))).flat();
+    rss._reseedIndexCache = null;
+    const result = [];
+    for (const torrent of torrents) {
+      result.push(await rss._reseedPreview(torrent));
+    }
+    return result;
   };
 }
 
