@@ -86,8 +86,14 @@
         <a-form-item
           label="缓存时间"
           name="ttl"
-          extra="单位秒, 留空默认 300">
+          extra="单位秒, 留空默认 300; 在此时间内直接返回缓存">
           <a-input size="small" v-model:value="proxy.ttl"/>
+        </a-form-item>
+        <a-form-item
+          label="请求间隔"
+          name="fetchInterval"
+          extra="对源站真实请求的最小间隔秒数, 防止被风控; 0 关闭。例: 缓存45s+请求间隔600s = 每10分钟才真正请求一次站点, 其余返回缓存">
+          <a-input size="small" v-model:value="proxy.fetchInterval"/>
         </a-form-item>
         <a-form-item
           label="Cookie"
@@ -185,6 +191,7 @@ export default {
         url: '',
         secret: '',
         ttl: 300,
+        fetchInterval: 0,
         cookie: '',
         userAgent: '',
         include: '',

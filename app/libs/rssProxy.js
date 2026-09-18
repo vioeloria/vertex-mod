@@ -31,8 +31,14 @@ const _transform = async function (body, config) {
 
 exports.getRss = async function (config) {
   const cacheKey = `vertex:rssproxy:${config.token}`;
+  const lastKey = `vertex:rssproxy:last:${config.token}`;
+  const ttl = +config.ttl > 0 ? +config.ttl : 300;
+  const fetchInterval = +config.fetchInterval > 0 ? +config.fetchInterval : 0;
+  const now = Math.floor(Date.now() / 1000);
   const cache = await redis.get(cacheKey);
-  if (cache) return cache;
+  const lastFetch = +((await redis.get(lastKey)) || 0);
+  if (cache && now - lastFetch < ttl) return cache;
+  if (cache && fetchInterval > 0 && now - lastFetch < fetchInterval) return cache;
   const headers = {};
   if (config.cookie) headers.cookie = config.cookie;
   if (config.userAgent) headers['user-agent'] = config.userAgent;
@@ -57,7 +63,7 @@ exports.getRss = async function (config) {
       logger.error('RSS 代理转换失败, 返回原始内容\n', e);
     }
   }
-  const ttl = +config.ttl > 0 ? +config.ttl : 300;
-  await redis.setWithExpire(cacheKey, body, ttl);
+  await redis.setWithExpire(cacheKey, body, 3600 * 24 * 7);
+  await redis.setWithExpire(lastKey, String(now), 3600 * 24 * 7);
   return body;
 };
