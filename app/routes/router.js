@@ -217,6 +217,7 @@ module.exports = function (app, express, router) {
   router.post('/rss/mikanSearch', ctrl.Rss.mikanSearch);
   router.post('/rss/mikanPush', ctrl.Rss.mikanPush);
   router.post('/rss/reseedPreview', ctrl.Rss.reseedPreview);
+  router.get('/rss/listReseed', ctrl.Rss.listReseed);
 
   router.get('/subscribe/list', ctrl.Douban.list);
   router.post('/subscribe/add', ctrl.Douban.add);

@@ -82,19 +82,27 @@ class RssMod {
     return '任务已开始执行。';
   };
 
+  async listReseed () {
+    return await util.getRecords('select * from torrents where record_note like \'%辅种%\' order by record_time desc limit 200');
+  };
+
   async reseedPreview (options) {
     const rssSet = { ...options };
-    if (!rssSet.rssUrls || rssSet.rssUrls.length === 0) return [];
+    if (!rssSet.rssUrls || rssSet.rssUrls.length === 0) return { stats: { clients: 0, torrents: 0 }, list: [] };
     rssSet.id = rssSet.id || 'preview';
     rssSet.dryrun = true;
     const rss = new Rss(rssSet);
     const torrents = (await Promise.all(rss.urls.map(url => rssLib.getTorrents(url)))).flat();
     rss._reseedIndexCache = null;
-    const result = [];
+    const index = rss._reseedIndex();
+    const list = [];
     for (const torrent of torrents) {
-      result.push(await rss._reseedPreview(torrent));
+      list.push(await rss._reseedPreview(torrent));
     }
-    return result;
+    return {
+      stats: { clients: index.clients, torrents: index.total },
+      list
+    };
   };
 }
 

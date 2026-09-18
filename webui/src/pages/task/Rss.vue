@@ -285,6 +285,17 @@
         </a-form-item>
         <a-form-item
           v-if="rss.rssReseed"
+          label="辅种匹配方式"
+          name="reseedMatchType"
+          extra="仅名称=名称完全一致; 仅大小=大小一致(跨站最实用); 名称归一化+大小=忽略大小写/标点/分组后缀再比名称且大小一致">
+          <a-select size="small" v-model:value="rss.reseedMatchType">
+            <a-select-option value="name">仅名称一致</a-select-option>
+            <a-select-option value="size">仅大小一致</a-select-option>
+            <a-select-option value="nameSize">名称归一化 + 大小</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item
+          v-if="rss.rssReseed"
           label="辅种跳过校验"
           name="reseedSkipChecking"
           extra="辅种时跳过校验, 直接开始做种 (推荐开启)">
@@ -368,6 +379,7 @@
           <a-button style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" @click="clearRss()">清空</a-button>
           <a-button type="primary" style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" @click="dryrun()">试运行</a-button>
           <a-button type="primary" danger style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" :loading="reseedPreviewLoading" @click="reseedPreview()">辅种预览</a-button>
+          <a-button style="margin-left: 12px; margin-top: 24px; margin-bottom: 48px;" @click="listReseed()">辅种记录</a-button>
         </a-form-item>
       </a-form>
     </div>
@@ -427,8 +439,8 @@
     <div style="text-align: left; ">
       <a-alert message="说明" type="info" style="margin-bottom: 12px;">
         <template #description>
-          阈值: {{ rss.reseedProgress || 50 }}% | 匹配方式: 仅名称一致 | 目标: 已存在同名种子的下载器。
-          展示 RSS 缓存内容与各下载器同名种子的对比情况, 不会实际推送。
+          阈值: {{ rss.reseedProgress || 50 }}% | 匹配方式: {{ reseedMatchTypeText }} | 已扫描: {{ reseedStats.clients }} 个下载器 / {{ reseedStats.torrents }} 个种子。
+          展示 RSS 缓存内容与下载器的对比情况, 不会实际推送。橙色行「大小相同(名称不同)」表示可用「仅大小」匹配。
         </template>
       </a-alert>
       <a-table
@@ -442,7 +454,33 @@
             {{ $formatSize(record.size) }}
           </template>
           <template v-if="column.dataIndex === 'status'">
-            <a-tag :color="record.status === '✔ 可辅种' ? 'success' : 'default'">{{ record.status }}</a-tag>
+            <a-tag :color="record.status === '✔ 可辅种' ? 'success' : (record.status === '大小相同(名称不同)' ? 'orange' : 'default')">{{ record.status }}</a-tag>
+          </template>
+        </template>
+      </a-table>
+    </div>
+  </a-modal>
+  <a-modal
+    v-model:visible="reseedLogVisible"
+    title="辅种记录"
+    width="1100px"
+    :footer="null">
+    <div style="text-align: left; ">
+      <a-table
+        :columns="reseedLogColumns"
+        size="small"
+        :data-source="reseedLogList"
+        :pagination="{ pageSize: 10 }"
+        :scroll="{ x: 800 }">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'record_time'">
+            {{ $moment(record.record_time * 1000).format('YYYY-MM-DD HH:mm:ss') }}
+          </template>
+          <template v-if="column.dataIndex === 'size'">
+            {{ $formatSize(record.size) }}
+          </template>
+          <template v-if="column.dataIndex === 'record_type'">
+            <a-tag :color="record.record_type === 1 ? 'success' : (record.record_type === 3 ? 'error' : 'default')">{{ record.record_type === 1 ? '成功' : (record.record_type === 3 ? '失败' : '拒绝') }}</a-tag>
           </template>
         </template>
       </a-table>
@@ -523,14 +561,40 @@ export default {
         width: 30
       }
     ];
+    const reseedLogColumns = [
+      {
+        title: '时间',
+        dataIndex: 'record_time',
+        width: 150
+      }, {
+        title: '种子名',
+        dataIndex: 'name'
+      }, {
+        title: '大小',
+        dataIndex: 'size',
+        width: 100
+      }, {
+        title: '状态',
+        dataIndex: 'record_type',
+        width: 70
+      }, {
+        title: '备注',
+        dataIndex: 'record_note',
+        width: 120
+      }
+    ];
     return {
       columns,
       dryrunColumns,
       reseedColumns,
+      reseedLogColumns,
       modalVisible: false,
       reseedPreviewVisible: false,
       reseedPreviewLoading: false,
       reseedPreviewList: [],
+      reseedStats: { clients: 0, torrents: 0 },
+      reseedLogVisible: false,
+      reseedLogList: [],
       rssList: [],
       downloaders: [],
       notifications: [],
@@ -546,6 +610,7 @@ export default {
         onlyReseed: false,
         reseedProgress: 50,
         reseedSkipChecking: true,
+        reseedMatchType: 'name',
         maxSleepTime: 600,
         skipSameTorrent: true,
         pushTorrentFile: true,
@@ -588,6 +653,10 @@ export default {
         }
       }
       return rows;
+    },
+    reseedMatchTypeText () {
+      const map = { name: '仅名称', size: '仅大小', nameSize: '名称(归一化)+大小' };
+      return map[this.rss.reseedMatchType] || '仅名称';
     }
   },
   methods: {
@@ -653,12 +722,22 @@ export default {
       this.reseedPreviewLoading = true;
       try {
         const res = await this.$api().rss.reseedPreview({ ...this.rss });
-        this.reseedPreviewList = res.data;
+        this.reseedPreviewList = res.data.list || [];
+        this.reseedStats = res.data.stats || { clients: 0, torrents: 0 };
         this.reseedPreviewVisible = true;
       } catch (e) {
         this.$message().error(e.message);
       } finally {
         this.reseedPreviewLoading = false;
+      }
+    },
+    async listReseed () {
+      try {
+        const res = await this.$api().rss.listReseed();
+        this.reseedLogList = res.data;
+        this.reseedLogVisible = true;
+      } catch (e) {
+        this.$message().error(e.message);
       }
     },
     async enableTask (record) {

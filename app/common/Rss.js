@@ -25,6 +25,7 @@ class Rss {
     this.reseedClients = rss.reseedClients || [];
     this.reseedProgress = (rss.reseedProgress === undefined || rss.reseedProgress === null || rss.reseedProgress === '') ? 50 : Math.min(100, Math.max(0, +rss.reseedProgress));
     this.reseedSkipChecking = rss.reseedSkipChecking === undefined ? true : !!rss.reseedSkipChecking;
+    this.reseedMatchType = rss.reseedMatchType || 'name';
     this.pushMessage = rss.pushMessage;
     this.skipSameTorrent = rss.skipSameTorrent;
     this.scrapeFree = rss.scrapeFree;
@@ -217,17 +218,28 @@ class Rss {
     return clients;
   }
 
+  _normalizeName (name) {
+    return (name || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+  }
+
   _reseedIndex () {
     if (this._reseedIndexCache) return this._reseedIndexCache;
-    const index = {};
-    for (const client of this._reseedTargets()) {
+    const name = {};
+    const size = {};
+    const total = new Set();
+    const clients = this._reseedTargets();
+    for (const client of clients) {
       for (const _torrent of client.maindata.torrents) {
-        if (!index[_torrent.name]) index[_torrent.name] = [];
-        index[_torrent.name].push({ client, torrent: _torrent });
+        if (!name[_torrent.name]) name[_torrent.name] = [];
+        name[_torrent.name].push({ client, torrent: _torrent });
+        const key = +_torrent.size;
+        if (!size[key]) size[key] = [];
+        size[key].push({ client, torrent: _torrent });
+        total.add(_torrent.hash);
       }
     }
-    this._reseedIndexCache = index;
-    return index;
+    this._reseedIndexCache = { name, size, total: total.size, clients: clients.length };
+    return this._reseedIndexCache;
   }
 
   _reseedSkipSameSize (torrent, targetTorrent) {
@@ -245,7 +257,17 @@ class Rss {
   async _findReseedTarget (torrent) {
     if (!torrent.url) return null;
     if (torrent.hash && torrent.hash.indexOf('fakehash') !== -1) return null;
-    const candidates = this._reseedIndex()[torrent.name] || [];
+    const index = this._reseedIndex();
+    let candidates = index.name[torrent.name] || [];
+    if (this.reseedMatchType === 'size') {
+      candidates = index.size[+torrent.size] || [];
+    } else if (this.reseedMatchType === 'nameSize') {
+      candidates = candidates.filter(item => +item.torrent.size === +torrent.size);
+      if (candidates.length === 0) {
+        const norm = this._normalizeName(torrent.name);
+        candidates = (index.size[+torrent.size] || []).filter(item => this._normalizeName(item.torrent.name) === norm);
+      }
+    }
     for (const candidate of candidates) {
       const _torrent = candidate.torrent;
       const progress = +_torrent.size > 0 ? (+_torrent.completed / +_torrent.size) * 100 : 0;
@@ -313,22 +335,29 @@ class Rss {
   }
 
   async _reseedPreview (torrent) {
-    const candidates = this._reseedIndex()[torrent.name] || [];
+    const index = this._reseedIndex();
+    const nameCandidates = index.name[torrent.name] || [];
+    const sizeCandidates = (index.size[+torrent.size] || []).filter(item => item.torrent.name !== torrent.name).slice(0, 5);
     const list = [];
-    for (const candidate of candidates) {
+    const seen = {};
+    const pushCandidate = async (candidate, note) => {
       const _torrent = candidate.torrent;
+      if (seen[_torrent.hash]) return;
+      seen[_torrent.hash] = true;
       const progress = +_torrent.size > 0 ? Math.round((+_torrent.completed / +_torrent.size) * 1000) / 10 : 0;
-      let status;
-      if (progress < this.reseedProgress) {
-        status = `进度不足 ${this.reseedProgress}% (当前 ${progress}%)`;
-      } else if (_torrent.hash === torrent.hash) {
-        status = '与本任务种子 hash 相同';
-      } else {
-        const ownRecord = await util.getRecord('SELECT * FROM torrents WHERE hash = ? AND rss_id = ?', [_torrent.hash, this.id]);
-        if (ownRecord && ownRecord.id) {
-          status = '本任务已添加过该种子';
+      let status = note;
+      if (!status) {
+        if (progress < this.reseedProgress) {
+          status = `进度不足 ${this.reseedProgress}% (当前 ${progress}%)`;
+        } else if (_torrent.hash === torrent.hash) {
+          status = '与本任务种子 hash 相同';
         } else {
-          status = '✔ 可辅种';
+          const ownRecord = await util.getRecord('SELECT * FROM torrents WHERE hash = ? AND rss_id = ?', [_torrent.hash, this.id]);
+          if (ownRecord && ownRecord.id) {
+            status = '本任务已添加过该种子';
+          } else {
+            status = '✔ 可辅种';
+          }
         }
       }
       list.push({
@@ -337,22 +366,32 @@ class Rss {
         progress,
         status
       });
+    };
+    for (const candidate of nameCandidates) {
+      await pushCandidate(candidate, '');
+    }
+    for (const candidate of sizeCandidates) {
+      await pushCandidate(candidate, '大小相同(名称不同)');
     }
     if (list.length === 0) {
       return {
         name: torrent.name,
         size: torrent.size,
         candidates: [],
-        result: '未找到同名种子',
+        result: '未找到匹配',
         wouldReseed: false
       };
     }
     const ok = list.filter(item => item.status === '✔ 可辅种');
+    let result = ok.length > 0 ? '可辅种到 ' + ok.map(item => item.client).join(' / ') : '有匹配但不可辅种';
+    if (ok.length === 0 && sizeCandidates.some(item => (+item.torrent.completed / +item.torrent.size) * 100 >= this.reseedProgress)) {
+      result += ', 可尝试「大小」匹配';
+    }
     return {
       name: torrent.name,
       size: torrent.size,
       candidates: list,
-      result: ok.length > 0 ? '可辅种到 ' + ok.map(item => item.client).join(' / ') : '无可辅种目标',
+      result,
       wouldReseed: ok.length > 0
     };
   }

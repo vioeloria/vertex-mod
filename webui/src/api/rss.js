@@ -32,5 +32,9 @@ export default {
   reseedPreview: async (rss) => {
     const url = '/api/rss/reseedPreview';
     return await post(url, rss);
+  },
+  listReseed: async () => {
+    const url = '/api/rss/listReseed';
+    return await get(url);
   }
 };
