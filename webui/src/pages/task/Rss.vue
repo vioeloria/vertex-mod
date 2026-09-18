@@ -127,6 +127,14 @@
           </a-input>
         </a-form-item>
         <a-form-item
+          label="RSS 代理"
+          name="rssProxy"
+          extra="从已启用的 RSS 代理中选择, 自动把代理地址加入下方 RssUrl 列表, 统一走程序内部缓存, 避免频繁访问站点">
+          <a-select size="small" v-model:value="rssProxyId" @change="useProxy">
+            <a-select-option v-for="proxy of rssProxies" :key="proxy.id" :value="proxy.token">{{ proxy.alias }} - {{ proxy.url }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item
           label="RssUrl 列表"
           name="rssUrls"
           :rules="[{ required: true, message: '${label}不可为空! ' }]">
@@ -293,6 +301,13 @@
             <a-select-option value="size">仅大小一致</a-select-option>
             <a-select-option value="nameSize">名称归一化 + 大小</a-select-option>
           </a-select>
+        </a-form-item>
+        <a-form-item
+          v-if="rss.rssReseed"
+          label="辅种扫描周期"
+          name="reseedCron"
+          extra="独立辅种扫描的 Cron 表达式 (如 */10 * * * * = 每10分钟); 留空则跟随 RSS 周期。该扫描通过 RSS 缓存/代理读取, 不重复直接访问站点">
+          <a-input size="small" v-model:value="rss.reseedCron" placeholder="留空则跟随 RSS 周期"/>
         </a-form-item>
         <a-form-item
           v-if="rss.rssReseed"
@@ -599,6 +614,8 @@ export default {
       downloaders: [],
       notifications: [],
       rssRules: [],
+      rssProxies: [],
+      rssProxyId: '',
       rss: {},
       defaultRss: {
         clientArr: [],
@@ -611,6 +628,7 @@ export default {
         reseedProgress: 50,
         reseedSkipChecking: true,
         reseedMatchType: 'name',
+        reseedCron: '',
         maxSleepTime: 600,
         skipSameTorrent: true,
         pushTorrentFile: true,
@@ -690,6 +708,23 @@ export default {
       } catch (e) {
         this.$message().error(e.message);
       }
+    },
+    async listRssProxy () {
+      try {
+        const res = await this.$api().rssProxy.list();
+        this.rssProxies = res.data.filter(item => item.enable && item.token);
+      } catch (e) {
+        this.$message().error(e.message);
+      }
+    },
+    useProxy (token) {
+      if (!token) return;
+      const url = window.location.origin + '/rss/' + token + '.xml';
+      if (this.rss.rssUrls.indexOf(url) === -1) {
+        this.rss.rssUrls.push(url);
+      }
+      this.rssProxyId = '';
+      this.$message().success('已添加代理地址到 RSS 列表');
     },
     async listDownloader () {
       try {
@@ -795,6 +830,7 @@ export default {
     this.listNotification();
     this.listDownloader();
     this.listRssRule();
+    this.listRssProxy();
     this.listRss();
   }
 };

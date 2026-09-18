@@ -26,6 +26,7 @@ class Rss {
     this.reseedProgress = (rss.reseedProgress === undefined || rss.reseedProgress === null || rss.reseedProgress === '') ? 50 : Math.min(100, Math.max(0, +rss.reseedProgress));
     this.reseedSkipChecking = rss.reseedSkipChecking === undefined ? true : !!rss.reseedSkipChecking;
     this.reseedMatchType = rss.reseedMatchType || 'name';
+    this.reseedCron = rss.reseedCron || '';
     this.pushMessage = rss.pushMessage;
     this.skipSameTorrent = rss.skipSameTorrent;
     this.scrapeFree = rss.scrapeFree;
@@ -57,6 +58,9 @@ class Rss {
     this.maxClientDownloadCount = +rss.maxClientDownloadCount;
     if (!rss.dryrun) {
       this.rssJob = cron.schedule(rss.cron, async () => { try { await this.rss(); } catch (e) { logger.error(this.alias, e); } });
+      if (rss.reseedCron) {
+        this.reseedJob = cron.schedule(rss.reseedCron, async () => { try { await this.reseedRun(); } catch (e) { logger.error(this.alias, e); } });
+      }
       this.clearCount = cron.schedule('0 * * * *', () => { this.addCount = 0; });
       logger.info('Rss 任务', this.alias, '初始化完毕');
     }
@@ -186,6 +190,10 @@ class Rss {
     logger.info('销毁 Rss 实例:', this.alias);
     this.rssJob.stop();
     delete this.rssJob;
+    if (this.reseedJob) {
+      this.reseedJob.stop();
+      delete this.reseedJob;
+    }
     this.clearCount.stop();
     delete this.clearCount;
     delete global.runningRss[this.id];
@@ -553,6 +561,20 @@ class Rss {
     }
   }
 
+  async reseedRun () {
+    logger.info(this.alias, '辅种独立扫描开始');
+    this._reseedIndexCache = null;
+    const torrents = (await Promise.all(this.urls.map(url => rss.getTorrents(url)))).flat();
+    for (const torrent of torrents) {
+      if (this.addCount >= this.addCountPerHour) {
+        logger.debug(this.alias, '辅种扫描达到每小时上限, 停止');
+        break;
+      }
+      await this._rssReseed(torrent);
+    }
+    logger.info(this.alias, '辅种独立扫描结束');
+  }
+
   async rss (_torrents) {
     let torrents = [];
     if (_torrents) {
@@ -582,7 +604,7 @@ class Rss {
         )[0] || availableClients[0];
       const sqlRes = await util.getRecord('SELECT * FROM torrents WHERE hash = ? AND rss_id = ?', [torrent.hash, this.id]);
       if (sqlRes && sqlRes.id) {
-        if (this.autoReseed && this.addCount < this.addCountPerHour) {
+        if (this.autoReseed && !this.reseedCron && this.addCount < this.addCountPerHour) {
           await this._rssReseed(torrent);
         }
         continue;
